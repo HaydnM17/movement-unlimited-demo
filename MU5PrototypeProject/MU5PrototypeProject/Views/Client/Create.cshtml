@@ -1,0 +1,203 @@
+﻿@model MU5PrototypeProject.Models.Client
+
+@{
+    ViewData["Title"] = "Create Client";
+    var maxDob = ViewData["MaxDOB"]?.ToString() ?? DateTime.Today.AddYears(-7).ToString("yyyy-MM-dd");
+    var minDob = ViewData["MinDOB"]?.ToString() ?? DateTime.Today.AddYears(-120).ToString("yyyy-MM-dd");
+    var defaultDob = ViewData["DefaultDOB"]?.ToString() ?? maxDob;
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Create Client</h1>
+</div>
+
+<form id="pageForm" asp-action="Create" class="sectionStack editShell">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+
+    <div class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Client Profile</h2>
+        </div>
+        <div class="row g-3 editSectionGrid">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="FirstName" class="control-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="FirstName" class="form-control" placeholder="First Name" required />
+                    <span asp-validation-for="FirstName" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="LastName" class="control-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="LastName" class="form-control" placeholder="Last Name" required />
+                    <span asp-validation-for="LastName" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="DOB" class="control-label"></label>
+                    <input asp-for="DOB" class="form-control" type="date" value="@defaultDob" max="@maxDob" min="@minDob" lang="en-CA" />
+                    <span asp-validation-for="DOB" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label asp-for="Phone" class="control-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="Phone" class="form-control" placeholder="Phone Number" required />
+                    <span asp-validation-for="Phone" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Contact and File Access</h2>
+        </div>
+        <div class="row g-3 editSectionGrid">
+            <div class="col-12">
+                <div class="form-group">
+                    <label asp-for="Email" class="control-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="Email" class="form-control longTextControl clientTextInput" placeholder="Email" autocomplete="email" inputmode="email" spellcheck="false" required />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="form-group">
+                    <label asp-for="ClientFolderUrl" class="control-label"></label>
+                    <input asp-for="ClientFolderUrl" class="form-control longTextControl clientTextInput" placeholder="Client Folder URL" type="url" inputmode="url" spellcheck="false" />
+                    <span asp-validation-for="ClientFolderUrl" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="formActions pageFooterActions">
+        <input type="hidden" id="confirmation" name="confirmation" value="confirm" />
+        <input id="btnconfirm" type="submit" value="Save" class="mu-btn mu-btn-primary" />
+        <button id="BtnFill" type="button" onclick="FillCreate()" class="mu-btn mu-btn-accent">Fill Fields</button>
+        <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Clients</a>
+    </div>
+</form>
+
+<div class="modal fade" id="mymodal" tabindex="-1" aria-labelledby="clientCreateConfirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+        <div class="modal-content mu-modal">
+            <div class="mu-modal-accent"></div>
+            <div class="modal-header mu-modal-header">
+                <div>
+                    <span class="mu-modal-badge">Review Client</span>
+                    <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="clientCreateConfirmTitle">Confirm client details</h2>
+                    <p class="mu-modal-copy">Please review the client profile before saving it.</p>
+                </div>
+                <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body mu-modal-body">
+                <div class="detailFields clientConfirmGrid">
+                    <div class="detailField">
+                        <span class="detailFieldLabel">First Name</span>
+                        <div id="ModalFirstName" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Last Name</span>
+                        <div id="ModalLastName" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Date of Birth</span>
+                        <div id="ModalDOB" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Phone</span>
+                        <div id="ModalPhone" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField clientConfirmItem-wide">
+                        <span class="detailFieldLabel">Email</span>
+                        <div id="ModalEmail" class="detailFieldValue clientTextValue clientTextValue-mono clientTextValue-long"></div>
+                    </div>
+                    <div class="detailField clientConfirmItem-wide">
+                        <span class="detailFieldLabel">Client Folder URL</span>
+                        <div id="ModalClientFolderUrl" class="detailFieldValue clientTextValue clientTextValue-mono clientTextValue-long"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer mu-modal-footer">
+                <input id="btnsubmit" type="submit" form="pageForm" value="Confirm" class="mu-btn mu-btn-primary" />
+                <button type="button" class="mu-btn mu-btn-ghost" data-bs-dismiss="modal">Back to Form</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script type="text/javascript" language="javascript">
+        function FillCreate() {
+            document.getElementById("FirstName").value = "Kaiden";
+            document.getElementById("LastName").value = "Gwynne";
+            document.getElementById("DOB").value = "2002-02-20";
+            document.getElementById("Phone").value = "2896961234";
+            document.getElementById("Email").value = "Gwynnek@yahoo.com";
+        }
+
+        const form = document.getElementById("pageForm");
+        const confirmButton = document.getElementById("btnconfirm");
+        const submitButton = document.getElementById("btnsubmit");
+        const confirmationField = document.getElementById("confirmation");
+        const modalElement = document.getElementById("mymodal");
+        const modal = new bootstrap.Modal(modalElement);
+        const jqueryForm = window.jQuery ? window.jQuery(form) : null;
+
+        function setModalValue(id, value) {
+            const target = document.getElementById(id);
+            const text = typeof value === "string" ? value.trim() : value;
+            target.textContent = text ? text : "Not provided";
+        }
+
+        function populateModal() {
+            setModalValue("ModalFirstName", document.getElementById("FirstName").value);
+            setModalValue("ModalLastName", document.getElementById("LastName").value);
+            setModalValue("ModalDOB", document.getElementById("DOB").value);
+            setModalValue("ModalPhone", document.getElementById("Phone").value);
+            setModalValue("ModalEmail", document.getElementById("Email").value);
+            setModalValue("ModalClientFolderUrl", document.getElementById("ClientFolderUrl").value);
+        }
+
+        function isFormValid() {
+            let jqueryValid = true;
+
+            if (jqueryForm && jqueryForm.data("validator")) {
+                jqueryForm.data("validator").settings.ignore = [];
+                jqueryValid = jqueryForm.valid();
+            }
+
+            return jqueryValid && form.checkValidity();
+        }
+
+        confirmButton.addEventListener("click", function () {
+            confirmationField.value = "confirm";
+        });
+
+        submitButton.addEventListener("click", function () {
+            confirmationField.value = "submit";
+        });
+
+        form.addEventListener("submit", function (ev) {
+            if (confirmationField.value !== "confirm") {
+                return;
+            }
+
+            if (!isFormValid()) {
+                form.reportValidity();
+                return;
+            }
+
+            ev.preventDefault();
+            populateModal();
+            modal.show();
+        });
+    </script>
+}

@@ -1,0 +1,210 @@
+@model AccountCreateViewModel
+
+@{
+    ViewData["Title"] = "Create Account";
+}
+
+<div class="pageHeader pageHeaderSplit">
+    <div>
+        <h1 class="pageTitle">Create Staff Account</h1>
+        <p class="pageLead">Set up sign-in access for a staff member, assign their role, and choose a temporary password they will change on first sign-in.</p>
+    </div>
+    <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Accounts</a>
+</div>
+
+<form asp-action="Create" method="post" class="sectionStack editShell accountCreateShell" id="accountCreateForm">
+    <div asp-validation-summary="ModelOnly" class="authValidation"></div>
+
+    <div class="accountCreateGrid">
+        <section class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Staff Details</h2>
+            </div>
+            <div class="row g-3 editSectionGrid">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label asp-for="FirstName" class="form-label"></label>
+                        <input asp-for="FirstName" class="form-control" autocomplete="given-name" />
+                        <span asp-validation-for="FirstName" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label asp-for="LastName" class="form-label"></label>
+                        <input asp-for="LastName" class="form-control" autocomplete="family-name" />
+                        <span asp-validation-for="LastName" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="form-group">
+                        <label asp-for="Email" class="form-label"></label>
+                        <input asp-for="Email" class="form-control longTextControl clientTextInput" autocomplete="off" inputmode="email" spellcheck="false" />
+                        <span asp-validation-for="Email" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Access Setup</h2>
+            </div>
+            <div class="row g-3 editSectionGrid">
+                <div class="col-12">
+                    <div class="form-group">
+                        <label asp-for="Role" class="form-label"></label>
+                        <select asp-for="Role" asp-items="Model.AvailableRoles" class="form-select" id="roleSelect">
+                            <option value="">Select a role</option>
+                        </select>
+                        <span asp-validation-for="Role" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="col-12" id="trainerLinkGroup">
+                    <div class="form-group">
+                        <label asp-for="TrainerId" class="form-label"></label>
+                        <select asp-for="TrainerId" asp-items="Model.AvailableTrainers" class="form-select">
+                            <option value="">No linked teacher record</option>
+                        </select>
+                        <span asp-validation-for="TrainerId" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Temporary Password</h2>
+        </div>
+
+        <div class="accountCreateIntro">
+            <p class="accountCreateIntroTitle">First sign-in security</p>
+            <p class="accountCreateIntroText">The staff member will use this password once, then they will be prompted to create their own password immediately after signing in. Temporary passwords can be any non-empty value.</p>
+        </div>
+
+        <div class="accountPasswordGrid">
+            <div class="accountPasswordField">
+                <label asp-for="TemporaryPassword" class="form-label"></label>
+                <div class="accountPasswordInputWrap">
+                    <input asp-for="TemporaryPassword" class="form-control accountPasswordInput" autocomplete="new-password" />
+                    <button type="button"
+                            class="accountPasswordToggle"
+                            data-target="TemporaryPassword"
+                            data-label-show="Show temporary password"
+                            data-label-hide="Hide temporary password"
+                            aria-label="Show temporary password"
+                            aria-pressed="false"
+                            title="Show temporary password">
+                        <svg class="accountPasswordToggleIcon accountPasswordToggleIcon-show" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+                            <circle cx="12" cy="12" r="3.25"></circle>
+                        </svg>
+                        <svg class="accountPasswordToggleIcon accountPasswordToggleIcon-hide" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M3 3l18 18"></path>
+                            <path d="M10.6 6.3A10.7 10.7 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-4 4.5"></path>
+                            <path d="M6.2 6.8C3.7 8.5 2 12 2 12s3.6 6 10 6c1.4 0 2.7-.3 3.8-.8"></path>
+                            <path d="M9.9 9.9a3.2 3.2 0 0 0 4.2 4.2"></path>
+                        </svg>
+                        <span class="visually-hidden">Toggle password visibility</span>
+                    </button>
+                </div>
+                <span asp-validation-for="TemporaryPassword" class="text-danger"></span>
+            </div>
+
+            <div class="accountPasswordField">
+                <label asp-for="ConfirmTemporaryPassword" class="form-label"></label>
+                <div class="accountPasswordInputWrap">
+                    <input asp-for="ConfirmTemporaryPassword" class="form-control accountPasswordInput" autocomplete="new-password" />
+                    <button type="button"
+                            class="accountPasswordToggle"
+                            data-target="ConfirmTemporaryPassword"
+                            data-label-show="Show confirmation password"
+                            data-label-hide="Hide confirmation password"
+                            aria-label="Show confirmation password"
+                            aria-pressed="false"
+                            title="Show confirmation password">
+                        <svg class="accountPasswordToggleIcon accountPasswordToggleIcon-show" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"></path>
+                            <circle cx="12" cy="12" r="3.25"></circle>
+                        </svg>
+                        <svg class="accountPasswordToggleIcon accountPasswordToggleIcon-hide" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M3 3l18 18"></path>
+                            <path d="M10.6 6.3A10.7 10.7 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-4 4.5"></path>
+                            <path d="M6.2 6.8C3.7 8.5 2 12 2 12s3.6 6 10 6c1.4 0 2.7-.3 3.8-.8"></path>
+                            <path d="M9.9 9.9a3.2 3.2 0 0 0 4.2 4.2"></path>
+                        </svg>
+                        <span class="visually-hidden">Toggle password visibility</span>
+                    </button>
+                </div>
+                <span asp-validation-for="ConfirmTemporaryPassword" class="text-danger"></span>
+            </div>
+        </div>
+
+    </section>
+
+    <section class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Account Status</h2>
+        </div>
+        <label class="accountCreateCheck">
+            <input asp-for="IsActive" class="form-check-input" />
+            <span class="accountCreateCheckContent">
+                <span class="accountCreateCheckTitle">Start this account as active</span>
+                <span class="accountCreateCheckCopy">Active staff can sign in immediately. Turn this off if the account should be created now but stay unavailable until later.</span>
+            </span>
+        </label>
+    </section>
+
+    <div class="formActions pageFooterActions">
+        <button type="submit" class="mu-btn mu-btn-primary">Create Account</button>
+        <a asp-action="Index" class="mu-btn mu-btn-ghost">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            var roleSelect = document.getElementById('roleSelect');
+            var trainerLinkGroup = document.getElementById('trainerLinkGroup');
+            var toggleButtons = document.querySelectorAll('.accountPasswordToggle');
+
+            function syncTrainerLinkVisibility() {
+                trainerLinkGroup.style.display = roleSelect.value === '@AppRoles.Trainer' ? '' : 'none';
+            }
+
+            function togglePasswordVisibility(button) {
+                var targetId = button.getAttribute('data-target');
+                var input = document.getElementById(targetId);
+                if (!input) {
+                    return;
+                }
+
+                var showing = input.type === 'text';
+                var nextIsShowing = !showing;
+                var nextType = nextIsShowing ? 'text' : 'password';
+                var nextLabel = nextIsShowing
+                    ? button.getAttribute('data-label-hide')
+                    : button.getAttribute('data-label-show');
+
+                input.type = nextType;
+                button.setAttribute('aria-pressed', nextIsShowing ? 'true' : 'false');
+                button.setAttribute('aria-label', nextLabel);
+                button.setAttribute('title', nextLabel);
+            }
+
+            roleSelect.addEventListener('change', syncTrainerLinkVisibility);
+
+            toggleButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    togglePasswordVisibility(button);
+                });
+            });
+
+            syncTrainerLinkVisibility();
+        })();
+    </script>
+}

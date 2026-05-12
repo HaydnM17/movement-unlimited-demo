@@ -1,0 +1,50 @@
+@model EditProfileViewModel
+
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<section class="authShell">
+    <div class="authPanel authPanelWide">
+        <div class="authBadge">Account</div>
+        <h1 class="authTitle">My Profile</h1>
+        <p class="authLead">Update your name and email details below.</p>
+
+        @if (TempData["StatusMessage"] is string statusMessage)
+        {
+            <div class="alert alert-success" role="status">@statusMessage</div>
+        }
+
+        <form asp-action="Profile" method="post" class="authForm">
+            <div asp-validation-summary="ModelOnly" class="authValidation" role="alert"></div>
+
+            <div class="authField">
+                <label asp-for="Email" class="form-label authLabel"></label>
+                <input asp-for="Email" class="form-control authInput" autocomplete="email" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <div class="authField">
+                <label asp-for="FirstName" class="form-label authLabel"></label>
+                <input asp-for="FirstName" class="form-control authInput" autocomplete="given-name" />
+                <span asp-validation-for="FirstName" class="text-danger"></span>
+            </div>
+
+            <div class="authField">
+                <label asp-for="LastName" class="form-label authLabel"></label>
+                <input asp-for="LastName" class="form-control authInput" autocomplete="family-name" />
+                <span asp-validation-for="LastName" class="text-danger"></span>
+            </div>
+
+            <div class="authActions">
+                <button type="submit" class="mu-btn mu-btn-accent">Save Profile</button>
+                <a asp-action="ChangePassword" class="mu-btn mu-btn-ghost">Change Password</a>
+                <a asp-controller="Home" asp-action="Index" class="mu-btn mu-btn-ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

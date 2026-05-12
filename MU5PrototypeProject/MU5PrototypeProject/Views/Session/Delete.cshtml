@@ -1,0 +1,43 @@
+@model MU5PrototypeProject.Models.Session
+
+@{
+    ViewData["Title"] = "Delete Session";
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Delete Session</h1>
+</div>
+
+<div class="formSectionCard sectionStack">
+    <p>Are you sure you want to permanently delete this session?</p>
+    <div asp-validation-summary="All" class="text-danger"></div>
+
+    <div class="detailFields">
+        <div class="detailField">
+            <span class="detailFieldLabel">Session Date (YYYY-MM-DD)</span>
+            <div class="detailFieldValue">@Model.SessionDate.ToString("yyyy-MM-dd")</div>
+        </div>
+        <div class="detailField">
+            <span class="detailFieldLabel">Session Type</span>
+            <div class="detailFieldValue">@Model.SessionType</div>
+        </div>
+        <div class="detailField">
+            <span class="detailFieldLabel">Clients</span>
+            <div class="detailFieldValue">@(string.IsNullOrWhiteSpace(Model.ParticipantNames) ? "Not assigned" : Model.ParticipantNames)</div>
+        </div>
+        <div class="detailField">
+            <span class="detailFieldLabel">Teacher</span>
+            <div class="detailFieldValue">@(Model.Trainer?.TrainerName ?? "Not assigned")</div>
+        </div>
+        <div class="detailField">
+            <span class="detailFieldLabel">Sessions/Week</span>
+            <div class="detailFieldValue">@Model.SharedSessionsPerWeekDisplay</div>
+        </div>
+    </div>
+
+    <form asp-action="Delete" class="formActions">
+        <input type="hidden" asp-for="ID" />
+        <input type="submit" value="Delete" class="mu-btn mu-btn-danger" />
+        <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Sessions</a>
+    </form>
+</div>

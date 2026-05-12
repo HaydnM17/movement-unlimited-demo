@@ -1,0 +1,70 @@
+﻿@model IEnumerable<MU5PrototypeProject.Models.Session>
+
+@{
+    ViewData["Title"] = "Dashboard";
+    var editableSessionIds = ViewData["EditableSessionIds"] as ISet<int> ?? new HashSet<int>();
+    var canManageClients = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+    bool CanEditSession(MU5PrototypeProject.Models.Session session) => editableSessionIds.Contains(session.ID);
+}
+<div class="pageHeader pageHeaderSplit">
+
+@* <h1 class="pageTitle">Welcome</h1> *@
+</div>
+<p>
+    @if (canManageClients)
+    {
+        <a class="primaryButton" asp-controller="Client" asp-action="Create">Create New Client</a>
+    }
+    <a class="primaryButton" asp-controller="Session" asp-action="Create">Create New Session</a>
+</p>
+<h2>Upcoming Sessions</h2>
+
+@* landing page is just a mini sessions list, so it borrows the same table/action styling on purpose *@
+<div class="dataBox">
+    <table class="table dataTable sessionsTable responsiveTable">
+        <thead>
+            <tr>
+                <th>
+                    <span class="tableHeaderLabel">Client</span>
+                </th>
+                <th>
+                    <span class="tableHeaderLabel">Teacher</span>
+                </th>
+                <th>
+                    @Html.DisplayNameFor(model => model.SessionDate)
+                </th>
+                <th class="actionsCol">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td data-label="Client">
+                        @(string.IsNullOrWhiteSpace(item.ParticipantNames) ? "Not assigned" : item.ParticipantNames)
+                    </td>
+                    <td data-label="Trainer">
+                        @(item.Trainer?.TrainerName ?? "Not assigned")
+                    </td>
+                    <td data-label="Session Date (YYYY-MM-DD)">
+                        @Html.DisplayFor(modelItem => item.SessionDate)
+                    </td>
+                    <td class="actionsCol" data-label="Actions">
+                        <div class="tableActions tableActions-inline">
+                            @if (item.IsArchived || !CanEditSession(item))
+                            {
+                                <span class="actionLink disabledAction" aria-disabled="true">Edit</span>
+                            }
+                            else
+                            {
+                                @* this has to point at Session, otherwise 404s again *@
+                                <a class="actionLink" asp-controller="Session" asp-action="Edit" asp-route-id="@item.ID">Edit</a>
+                            }
+                            <a class="actionLink" asp-controller="Session" asp-action="Details" asp-route-id="@item.ID">Details</a>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

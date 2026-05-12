@@ -1,0 +1,39 @@
+@model SessionStatus
+
+@{
+    var steps = new[]
+    {
+        new { Status = SessionStatus.Opened, Title = "Admin Setup", Meta = "Schedule and client details" },
+        new { Status = SessionStatus.Logged, Title = "Trainer Log", Meta = "Notes, exercises, and next steps" },
+        new { Status = SessionStatus.Completed, Title = "Closing Review", Meta = "Payment and final admin check" }
+    };
+
+    var currentIndex = Array.FindIndex(steps, step => step.Status == Model);
+    if (currentIndex < 0)
+    {
+        currentIndex = 0;
+    }
+}
+
+<nav class="sessionWorkflowProgress" aria-label="Session workflow progress">
+    <ol class="sessionWorkflowSteps">
+        @for (var index = 0; index < steps.Length; index++)
+        {
+            var step = steps[index];
+            var stateClass = index < currentIndex
+                ? "is-complete"
+                : index == currentIndex
+                    ? "is-current"
+                    : "is-upcoming";
+            var isCurrent = index == currentIndex;
+
+            <li class="sessionWorkflowStep @stateClass" aria-current="@(isCurrent ? "step" : null)">
+                <span class="sessionWorkflowMarker">@(index + 1)</span>
+                <span class="sessionWorkflowText">
+                    <span class="sessionWorkflowTitle">@step.Title</span>
+                    <span class="sessionWorkflowMeta">@step.Meta</span>
+                </span>
+            </li>
+        }
+    </ol>
+</nav>

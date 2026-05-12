@@ -1,0 +1,237 @@
+@using MU5PrototypeProject.Models
+@model IEnumerable<MU5PrototypeProject.Models.Session>
+
+@{
+    ViewData["Title"] = "Sessions";
+    var sortField = ViewData["sortField"]?.ToString() ?? "SessionDate";
+    if (sortField == "Session")
+    {
+        sortField = "SessionDate";
+    }
+
+    var sortDirection = ViewData["sortDirection"]?.ToString() ?? "asc";
+    var showFilter = ViewData["ShowFilter"]?.ToString() ?? string.Empty;
+    var filterActive = showFilter.Contains("show", StringComparison.OrdinalIgnoreCase);
+    var selectedSearchLifecycle = ViewData["SearchLifecycle"]?.ToString();
+    var editableSessionIds = ViewData["EditableSessionIds"] as ISet<int> ?? new HashSet<int>();
+    var canImportSessions = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+
+    string SortIndicator(string field) => sortField == field ? (sortDirection == "asc" ? "↑" : "↓") : string.Empty;
+    Func<SessionStatus, string> workflowBadgeClass = status => $"workflowBadge is-{status.ToString().ToLowerInvariant()}";
+    bool CanEditSession(Session session) => editableSessionIds.Contains(session.ID);
+}
+
+<div class="pageHeader pageHeaderSplit sessionsPageHeader">
+    <div class="sessionsPageIntro">
+        <h1 class="pageTitle">Sessions</h1>
+        <div class="pageToolbar">
+            <a class="mu-btn mu-btn-primary" asp-action="Create">Create New</a>
+            <button class="mu-btn @(filterActive ? "mu-btn-accent is-active" : "mu-btn-secondary") filterToggle" type="button" data-bs-toggle="collapse" id="filterToggle" data-bs-target="#collapseFilter" aria-expanded="false" aria-controls="collapseFilter">
+                Filter/Search @ViewData["numberFilters"]
+            </button>
+        </div>
+    </div>
+
+    <div class="sessionsHeaderTools">
+        <form asp-action="ExportRangeToPdf" method="get" class="uploadPanel mt-2">
+            <div class="form-group mb-0">
+                <label class="control-label">Export Sessions by Date Range</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" name="startDate" placeholder="Start Date" />
+                    <input type="date" class="form-control" name="endDate" placeholder="End Date" />
+                    <button type="submit" class="mu-btn mu-btn-secondary">Export to PDF</button>
+                </div>
+            </div>
+            @if (TempData["ExportFeedback"] != null)
+            {
+                <div class="text-danger mt-2">@TempData["ExportFeedback"]</div>
+            }
+        </form>
+
+        @if (canImportSessions)
+        {
+            <form asp-action="ImportExcel" asp-controller="Session" method="post" enctype="multipart/form-data" class="uploadPanel sessionUploadPanel">
+                <div class="form-group mb-0">
+                    <label class="control-label custom-file-label" for="theExcel">Upload Excel File (New Sessions)</label>
+                    <div class="input-group sessionUploadGroup sessionUploadGroup-import">
+                        <input type="file" class="form-control" name="theExcel" id="theExcel" />
+                        <div class="sessionUploadActions">
+                            <button type="submit" class="mu-btn mu-btn-accent">Upload Data</button>
+                            <a asp-action="DownloadImportTemplate" class="mu-btn mu-btn-secondary">Download Template</a>
+                        </div>
+                    </div>
+                </div>
+                @if (TempData["Feedback"] != null)
+                {
+                    <div class="text-danger mt-2">@Html.Raw(TempData["Feedback"])</div>
+                }
+            </form>
+        }
+    </div>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="alert">@statusMessage</div>
+}
+
+@if (TempData["ErrorMessage"] is string errorMessage)
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<form asp-action="Index" method="get">
+    <input type="hidden" name="sortDirection" value="@ViewData["sortDirection"]" />
+    <input type="hidden" name="sortField" value="@ViewData["sortField"]" />
+
+    <div class="form-horizontal">
+        <div class="collapse @ViewData["ShowFilter"]" id="collapseFilter">
+            <div class="card card-body bg-light filterCard border-0">
+                <div class="row g-3">
+                    <div class="form-group col-md-4">
+                        <label for="SearchClient" class="control-label">Search Client Name:</label>
+                        @Html.TextBox("SearchClient", null, new { @class = "form-control" })
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="TrainerID" class="control-label">Select by Teacher:</label>
+                        @Html.DropDownList("TrainerID", null, "All Teachers", htmlAttributes: new { @class = "form-control" })
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="SearchLifecycle" class="control-label">Filter by Session Status:</label>
+                        <select id="SearchLifecycle" name="SearchLifecycle" class="form-control">
+                            <option value="">All Status</option>
+                            <option value="Opened" selected="@(selectedSearchLifecycle == "Opened")">Opened</option>
+                            <option value="Logged" selected="@(selectedSearchLifecycle == "Logged")">Logged</option>
+                            <option value="Completed" selected="@(selectedSearchLifecycle == "Completed")">Completed</option>
+                            <option value="Canceled" selected="@(selectedSearchLifecycle == "Canceled")">Canceled</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <div class="form-check mt-4">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   id="showArchived"
+                                   name="showArchived"
+                                   value="true"
+                                   @((bool?)ViewData["showArchived"] == true ? "checked" : "") />
+                            <label class="form-check-label" for="showArchived">
+                                Show archived sessions
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-md-4">
+                        <div class="form-check mt-4">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   id="showUpcoming"
+                                   name="showUpcoming"
+                                   value="true"
+                                   @((bool?)ViewData["showUpcoming"] == true ? "checked" : "") />
+                            <label class="form-check-label" for="showUpcoming">
+                                Show Upcoming Sessions
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group col-md-4 align-self-end">
+                        <button type="submit" name="actionButton" value="Apply" class="mu-btn mu-btn-accent mu-btn-sm">Apply</button>
+                        <a asp-action="Index" class="mu-btn mu-btn-ghost mu-btn-sm">Clear</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* same deal as clients - these classes work together, so please do not trim them down "because it still looks fine on desktop" *@
+    <div class="dataBox">
+        <table class="table dataTable sessionsTable responsiveTable">
+            <thead>
+                <tr>
+                    <th>
+                        <button type="submit" name="actionButton" value="Client" class="sortButton" aria-label="Sort by client">
+                            <span>Client</span>
+                            @if (!string.IsNullOrEmpty(SortIndicator("Client")))
+                            {
+                                <span class="sortIndicator" aria-hidden="true">@SortIndicator("Client")</span>
+                            }
+                        </button>
+                    </th>
+                    <th>
+                        <button type="submit" name="actionButton" value="Teacher" class="sortButton" aria-label="Sort by Teacher">
+                            <span>Teacher</span>
+                            @if (!string.IsNullOrEmpty(SortIndicator("Trainer")))
+                            {
+                                <span class="sortIndicator" aria-hidden="true">@SortIndicator("Trainer")</span>
+                            }
+                        </button>
+                    </th>
+                    <th>
+                        <button type="submit" name="actionButton" value="SessionDate" class="sortButton" aria-label="Sort by session date">
+                            <span>@Html.DisplayNameFor(model => model.SessionDate)</span>
+                            @if (!string.IsNullOrEmpty(SortIndicator("SessionDate")))
+                            {
+                                <span class="sortIndicator" aria-hidden="true">@SortIndicator("SessionDate")</span>
+                            }
+                        </button>
+                    </th>
+                    <th>
+                        <span class="tableHeaderLabel">Total Sessions</span>
+                    </th>
+                    <th>
+                        <span class="tableHeaderLabel">Status</span>
+                    </th>
+                    <th class="actionsCol">
+                        <span class="tableHeaderLabel">Actions</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td data-label="Client" class="cell-wrap">
+                            @(string.IsNullOrWhiteSpace(item.ParticipantNames) ? "Not assigned" : item.ParticipantNames)
+                        </td>
+                        <td data-label="Trainer" class="cell-wrap">
+                            @(item.Trainer?.TrainerName ?? "Not assigned")
+                        </td>
+                        <td data-label="Session Date (YYYY-MM-DD)">
+                            @Html.DisplayFor(modelItem => item.SessionDate)
+                        </td>
+                        @* this label shows up in the mobile card/table view, not just in the desktop table *@
+                        <td data-label="Total Sessions">
+                            @item.TotalCompletedSessionsDisplay
+                        </td>
+                        <td data-label="Status">
+                            @if (item.IsCanceled)
+                            {
+                                <span class="workflowBadge is-canceled">Canceled</span>
+                                <div class="fieldNote mt-1">Workflow: @item.Status</div>
+                            }
+                            else
+                            {
+                                <span class="@workflowBadgeClass(item.Status)">@item.Status</span>
+                            }
+                        </td>
+                        <td class="actionsCol" data-label="Actions">
+                            <div class="tableActions tableActions-inline">
+                                @if (item.IsArchived || !CanEditSession(item))
+                                {
+                                    <span class="actionLink disabledAction" aria-disabled="true">Edit</span>
+                                }
+                                else
+                                {
+                                    <a class="actionLink" asp-action="Edit" asp-route-id="@item.ID">Edit</a>
+                                }
+                                <a class="actionLink" asp-action="Details" asp-route-id="@item.ID">Details</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <partial name="_PagingNavBar" />
+</form>

@@ -1,0 +1,228 @@
+@model IEnumerable<AccountListItemViewModel>
+
+@{
+    ViewData["Title"] = "Accounts";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-0">Staff Accounts</h1>
+        <p class="text-muted mb-0">Owner-managed staff logins, role assignments, and access status.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary">Create Account</a>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="alert">@statusMessage</div>
+}
+
+@if (TempData["ErrorMessage"] is string errorMessage)
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Trainer Link</th>
+                        <th>Password</th>
+                        <th class="text-end">Access</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var account in Model)
+                    {
+                        <tr class="@(account.IsActive ? string.Empty : "table-secondary")">
+                            <td>@account.FullName</td>
+                            <td>
+                                <form asp-action="UpdateEmail" method="post" class="d-flex align-items-center gap-2">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@account.Id" />
+                                    <input type="email"
+                                           name="email"
+                                           value="@account.Email"
+                                           class="form-control form-control-sm"
+                                           autocomplete="email"
+                                           aria-label="Email address for @account.FullName" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                </form>
+                            </td>
+                            <td>
+                                @if (account.CanChangeRole)
+                                {
+                                    <form asp-action="UpdateRole" method="post" class="d-flex align-items-center gap-2">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@account.Id" />
+                                        <select name="role" class="form-select form-select-sm">
+                                            @foreach (var roleName in AppRoles.All)
+                                            {
+                                                if (string.Equals(roleName, account.Role, StringComparison.Ordinal))
+                                                {
+                                                    <option value="@roleName" selected>@roleName</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@roleName">@roleName</option>
+                                                }
+                                            }
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <div class="fw-semibold">@account.Role</div>
+                                    <span class="text-muted small">@account.RoleChangeBlockedReason</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge @(account.IsActive ? "text-bg-success" : "text-bg-secondary")">
+                                    @(account.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td>@(string.IsNullOrWhiteSpace(account.LinkedTrainerName) ? "None" : account.LinkedTrainerName)</td>
+                            <td>@(account.MustChangePassword ? "Change required" : "Current")</td>
+                            <td class="text-end">
+                                @if (account.IsActive)
+                                {
+                                    if (account.CanDeactivate)
+                                    {
+                                        <form asp-action="UpdateStatus" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@account.Id" />
+                                            <input type="hidden" name="isActive" value="false" />
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-danger js-account-status-trigger"
+                                                    data-account-name="@account.FullName"
+                                                    data-account-email="@account.Email"
+                                                    data-action-label="Deactivate"
+                                                    data-confirm-style="danger">
+                                                Deactivate
+                                            </button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">@account.DeactivationBlockedReason</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <form asp-action="UpdateStatus" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@account.Id" />
+                                        <input type="hidden" name="isActive" value="true" />
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-success js-account-status-trigger"
+                                                data-account-name="@account.FullName"
+                                                data-account-email="@account.Email"
+                                                data-action-label="Activate"
+                                                data-confirm-style="success">
+                                            Activate
+                                        </button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="accountStatusModal" tabindex="-1" aria-labelledby="accountStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="accountStatusModalLabel">Confirm account change</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2" id="accountStatusModalMessage"></p>
+                <p class="text-muted small mb-0" id="accountStatusModalDetail"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn" id="accountStatusConfirmButton">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var modalElement = document.getElementById('accountStatusModal');
+            if (!modalElement || typeof bootstrap === 'undefined') {
+                return;
+            }
+
+            var modal = new bootstrap.Modal(modalElement);
+            var messageElement = document.getElementById('accountStatusModalMessage');
+            var detailElement = document.getElementById('accountStatusModalDetail');
+            var confirmButton = document.getElementById('accountStatusConfirmButton');
+            var triggerButtons = document.querySelectorAll('.js-account-status-trigger');
+            var pendingForm = null;
+
+            function resetConfirmButton() {
+                confirmButton.classList.remove('btn-danger', 'btn-success', 'btn-secondary');
+            }
+
+            triggerButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    pendingForm = button.closest('form');
+                    if (!pendingForm) {
+                        return;
+                    }
+
+                    var accountName = button.getAttribute('data-account-name') || 'this account';
+                    var accountEmail = button.getAttribute('data-account-email') || '';
+                    var actionLabel = button.getAttribute('data-action-label') || 'Update';
+                    var confirmStyle = button.getAttribute('data-confirm-style') || 'secondary';
+                    var actionLower = actionLabel.toLowerCase();
+
+                    messageElement.textContent = 'Are you sure you want to ' + actionLower + ' ' + accountName + '?';
+                    detailElement.textContent =
+                        actionLabel === 'Deactivate'
+                            ? accountName + ' will no longer be able to sign in or use the system. ' + accountEmail
+                            : accountName + ' will be able to sign in and use the system again. ' + accountEmail;
+
+                    confirmButton.textContent = actionLabel;
+                    resetConfirmButton();
+                    confirmButton.classList.add(confirmStyle === 'danger' ? 'btn-danger' : 'btn-success');
+
+                    modal.show();
+                });
+            });
+
+            confirmButton.addEventListener('click', function () {
+                if (!pendingForm) {
+                    return;
+                }
+
+                var formToSubmit = pendingForm;
+                pendingForm = null;
+                modal.hide();
+                formToSubmit.submit();
+            });
+
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                pendingForm = null;
+                resetConfirmButton();
+                confirmButton.classList.add('btn-secondary');
+                confirmButton.textContent = 'Confirm';
+                messageElement.textContent = '';
+                detailElement.textContent = '';
+            });
+        })();
+    </script>
+}

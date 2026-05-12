@@ -1,0 +1,2764 @@
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using MU5PrototypeProject.Models
+@using MU5PrototypeProject.Security
+@model MU5PrototypeProject.Models.ViewModels.SessionUpsertVM
+
+@{
+    ViewData["Title"] = "Edit Session";
+    var currentStatus = Model.CurrentStatus;
+    var requestedStage = Model.Status;
+    var isSemiPrivate = Model.SessionType == SessionType.SemiPrivate;
+    var isPhysio = Model.SessionType == SessionType.Physio;
+    var recordStatus = Model.IsArchived ? "Archived" : "Active";
+    var canLogByRole = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Trainer);
+    var canCompleteWorkflow = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+    var canStartLoggedStage = ViewData["CanStartLoggedStage"] is bool canStartLoggedStageValue
+        ? canStartLoggedStageValue
+        : canLogByRole;
+    var completedOnlyAccessMessage = ViewData["CompletedOnlyAccessMessage"]?.ToString();
+    var sessionDateAllowsLogged = Model.SessionDate.Date <= DateTime.Today;
+    var activeStage = currentStatus == SessionStatus.Logged && canCompleteWorkflow
+        ? SessionStatus.Completed
+        : requestedStage;
+    var canShowOpenedLoggedStage = currentStatus == SessionStatus.Opened && canStartLoggedStage && sessionDateAllowsLogged;
+    var showLaterStageSections = activeStage != SessionStatus.Opened && (currentStatus != SessionStatus.Opened || canShowOpenedLoggedStage);
+    var showOpenedFutureDateMessage = currentStatus == SessionStatus.Opened && canStartLoggedStage && !sessionDateAllowsLogged;
+    var showOpenedRoleMessage = currentStatus == SessionStatus.Opened && !canStartLoggedStage;
+    var showWorkflowSubmitButton = currentStatus != SessionStatus.Opened || canShowOpenedLoggedStage;
+    var isLoggedStage = activeStage == SessionStatus.Logged;
+    var useCompletionAccordionLayout = currentStatus == SessionStatus.Logged
+        && activeStage == SessionStatus.Completed;
+    var allowGeneralInfoEditing = false;
+
+    Func<SessionStatus, string> workflowBadgeClass = status => $"workflowBadge is-{status.ToString().ToLowerInvariant()}";
+    string YesNo(bool value) => value ? "Yes" : "No";
+    string LookupText(object? listObject, int? value)
+    {
+        var items = listObject as IEnumerable<SelectListItem>;
+        if (!value.HasValue)
+        {
+            return "Not assigned";
+        }
+
+        return items?.FirstOrDefault(i => i.Value == value.Value.ToString())?.Text ?? value.Value.ToString();
+    }
+
+    string mainSaveLabel = activeStage switch
+    {
+        SessionStatus.Opened => "Save as Opened",
+        SessionStatus.Logged => "Save as Logged",
+        SessionStatus.Completed => "Save as Completed",
+        _ => $"Save as {activeStage}"
+    };
+    SessionStatus? nextWorkflowStatus = currentStatus switch
+    {
+        SessionStatus.Logged when canCompleteWorkflow => SessionStatus.Completed,
+        _ => null
+    };
+    string? nextWorkflowLabel = nextWorkflowStatus switch
+    {
+        SessionStatus.Logged => "Continue to Log",
+        SessionStatus.Completed => "Continue to Complete",
+        _ => null
+    };
+    var showNextWorkflowButton = nextWorkflowStatus.HasValue
+        && nextWorkflowStatus.Value != activeStage
+        && !Model.IsArchived
+        && !isLoggedStage;
+
+    async Task RenderGeneralInfoBody()
+    {
+        if (allowGeneralInfoEditing)
+        {
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="SessionType" class="form-label"></label>
+                    <select asp-for="SessionType" class="form-control" asp-items="Html.GetEnumSelectList<SessionType>()"></select>
+                    <span asp-validation-for="SessionType" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SessionDate" class="form-label"></label>
+                    <input asp-for="SessionDate" class="form-control" type="date" lang="en-CA" />
+                    <span asp-validation-for="SessionDate" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="TrainerID" class="form-label"></label>
+                    <select asp-for="TrainerID" class="form-control" asp-items="ViewBag.TrainerID">
+                        <option value="">Select a Teacher</option>
+                    </select>
+                    <span asp-validation-for="TrainerID" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="ClientID" class="form-label"></label>
+                    <select asp-for="ClientID" class="form-control" asp-items="ViewBag.ClientID">
+                        <option value="">Select a Client</option>
+                    </select>
+                    <span asp-validation-for="ClientID" class="text-danger"></span>
+                </div>
+                <div class="col-md-4 semiPrivateOnly">
+                    <label asp-for="Client2ID" class="form-label"></label>
+                    <select asp-for="Client2ID" class="form-control" asp-items="ViewBag.ClientID">
+                        <option value="">Select a Second Client</option>
+                    </select>
+                    <span asp-validation-for="Client2ID" class="text-danger"></span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Session Type</span><div class="detailFieldValue">@Model.SessionType</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Session Date (YYYY-MM-DD)</span><div class="detailFieldValue">@Model.SessionDate.ToString("yyyy-MM-dd")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Teacher</span><div class="detailFieldValue">@LookupText(ViewBag.TrainerID, Model.TrainerID)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Client</span><div class="detailFieldValue">@LookupText(ViewBag.ClientID, Model.ClientID)</div></div>
+                @if (isSemiPrivate)
+                {
+                    <div class="detailField"><span class="detailFieldLabel">Client 2</span><div class="detailFieldValue">@LookupText(ViewBag.ClientID, Model.Client2ID)</div></div>
+                }
+            </div>
+        }
+    }
+
+    async Task RenderPreviousSessionViewerBody()
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" id="historyPreviousButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Previous</button>
+            <button type="button" id="historyNextButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Next</button>
+            <span id="historyStatusLabel" class="fieldNote mb-0">Current session values</span>
+        </div>
+        <div class="historyViewerMeta">
+            <span id="historyCountLabel" class="historyViewerMetaItem">Previous Sessions: -</span>
+        </div>
+    }
+
+    async Task RenderSessionNotesBody()
+    {
+        if (isSemiPrivate)
+        {
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="workflowSectionHint">
+                        <strong>Client 1</strong>
+                    </div>
+                    @if (activeStage == SessionStatus.Logged)
+                    {
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label asp-for="SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="SessionNotes.Goals" class="form-control" data-history-field="SessionNotes.Goals"></textarea>
+                                <span asp-validation-for="SessionNotes.Goals" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="SessionsPerWeekRecommended" class="form-label"></label><span class="text-danger"> *</span>
+                                <input asp-for="SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="SessionsPerWeekRecommended" />
+                                <span asp-validation-for="SessionsPerWeekRecommended" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="SessionNotes.GeneralComments" class="form-label"></label>
+                                <textarea asp-for="SessionNotes.GeneralComments" class="form-control" data-history-field="SessionNotes.GeneralComments"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="SessionNotes.SubjectiveReports" class="form-control" data-history-field="SessionNotes.SubjectiveReports"></textarea>
+                                <span asp-validation-for="SessionNotes.SubjectiveReports" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="SessionNotes.ObjectiveFindings" class="form-control" data-history-field="SessionNotes.ObjectiveFindings"></textarea>
+                                <span asp-validation-for="SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="SessionNotes.Plan" class="form-control" data-history-field="SessionNotes.Plan"></textarea>
+                                <span asp-validation-for="SessionNotes.Plan" class="text-danger"></span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="detailFields mt-3">
+                            <div class="detailField">
+                                <span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Goals) ? "-" : Model.SessionNotes.Goals)</div></div>
+                            <div class="detailField">
+                                <span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="SessionsPerWeekRecommended">@(Model.SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                            <div class="detailField">
+                                <span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.SessionNotes.GeneralComments) ? "-" : Model.SessionNotes.GeneralComments)</div></div>
+                            <div class="detailField">
+                                <span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.SessionNotes.SubjectiveReports) ? "-" : Model.SessionNotes.SubjectiveReports)</div></div>
+                            <div class="detailField">
+                                <span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.SessionNotes.ObjectiveFindings) ? "-" : Model.SessionNotes.ObjectiveFindings)</div></div>
+                            <div class="detailField">
+                                <span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Plan) ? "-" : Model.SessionNotes.Plan)</div></div>
+                        </div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <div class="workflowSectionHint">
+                        <strong>Client 2</strong>
+                    </div>
+                    @if (activeStage == SessionStatus.Logged)
+                    {
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label asp-for="Client2SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="Client2SessionNotes.Goals" class="form-control" data-history-field="Client2SessionNotes.Goals"></textarea>
+                                <span asp-validation-for="Client2SessionNotes.Goals" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label for="Client2SessionsPerWeekRecommended" class="form-label">Sessions/Week</label><span class="text-danger"> *</span>
+                                <input asp-for="Client2SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="Client2SessionsPerWeekRecommended" />
+                                <span asp-validation-for="Client2SessionsPerWeekRecommended" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Client2SessionNotes.GeneralComments" class="form-label"></label>
+                                <textarea asp-for="Client2SessionNotes.GeneralComments" class="form-control" data-history-field="Client2SessionNotes.GeneralComments"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Client2SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="Client2SessionNotes.SubjectiveReports" class="form-control" data-history-field="Client2SessionNotes.SubjectiveReports"></textarea>
+                                <span asp-validation-for="Client2SessionNotes.SubjectiveReports" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Client2SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="Client2SessionNotes.ObjectiveFindings" class="form-control" data-history-field="Client2SessionNotes.ObjectiveFindings"></textarea>
+                                <span asp-validation-for="Client2SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Client2SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                                <textarea asp-for="Client2SessionNotes.Plan" class="form-control" data-history-field="Client2SessionNotes.Plan"></textarea>
+                                <span asp-validation-for="Client2SessionNotes.Plan" class="text-danger"></span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="detailFields mt-3">
+                            <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.Goals) ? "-" : Model.Client2SessionNotes!.Goals)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="Client2SessionsPerWeekRecommended">@(Model.Client2SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.GeneralComments) ? "-" : Model.Client2SessionNotes!.GeneralComments)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.SubjectiveReports) ? "-" : Model.Client2SessionNotes!.SubjectiveReports)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.ObjectiveFindings) ? "-" : Model.Client2SessionNotes!.ObjectiveFindings)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.Plan) ? "-" : Model.Client2SessionNotes!.Plan)</div></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (activeStage == SessionStatus.Logged)
+        {
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label asp-for="SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                    <textarea asp-for="SessionNotes.Goals" class="form-control" data-history-field="SessionNotes.Goals"></textarea>
+                    <span asp-validation-for="SessionNotes.Goals" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SessionsPerWeekRecommended" class="form-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="SessionsPerWeekRecommended" />
+                    <span asp-validation-for="SessionsPerWeekRecommended" class="text-danger"></span>
+                </div>
+                <div class="col-md-6"><label asp-for="SessionNotes.GeneralComments" class="form-label"></label><textarea asp-for="SessionNotes.GeneralComments" class="form-control" data-history-field="SessionNotes.GeneralComments"></textarea></div>
+                <div class="col-md-6">
+                    <label asp-for="SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                    <textarea asp-for="SessionNotes.SubjectiveReports" class="form-control" data-history-field="SessionNotes.SubjectiveReports"></textarea>
+                    <span asp-validation-for="SessionNotes.SubjectiveReports" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                    <textarea asp-for="SessionNotes.ObjectiveFindings" class="form-control" data-history-field="SessionNotes.ObjectiveFindings"></textarea>
+                    <span asp-validation-for="SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                    <textarea asp-for="SessionNotes.Plan" class="form-control" data-history-field="SessionNotes.Plan"></textarea>
+                    <span asp-validation-for="SessionNotes.Plan" class="text-danger"></span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Goals) ? "-" : Model.SessionNotes.Goals)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="SessionsPerWeekRecommended">@(Model.SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.SessionNotes.GeneralComments) ? "-" : Model.SessionNotes.GeneralComments)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.SessionNotes.SubjectiveReports) ? "-" : Model.SessionNotes.SubjectiveReports)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.SessionNotes.ObjectiveFindings) ? "-" : Model.SessionNotes.ObjectiveFindings)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Plan) ? "-" : Model.SessionNotes.Plan)</div></div>
+            </div>
+        }
+    }
+
+    async Task RenderAccessoriesBody()
+    {
+        if (isSemiPrivate)
+        {
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="workflowSectionHint">
+                        <strong>Client 1</strong>
+                    </div>
+                    @if (activeStage == SessionStatus.Logged)
+                    {
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label asp-for="Accessories!.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                                <select asp-for="Accessories!.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Accessories.HeadPad">
+                                    <option value="">Select a head rest option</option>
+                                </select>
+                                <span asp-validation-for="Accessories!.HeadPad" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Accessories!.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                                <select asp-for="Accessories!.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Accessories.StrapsOrHandles">
+                                    <option value="">Select a strap or handle option</option>
+                                </select>
+                                <span asp-validation-for="Accessories!.StrapsOrHandles" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Accessories!.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                                <input asp-for="Accessories!.GearBar" class="form-control" data-history-field="Accessories.GearBar" />
+                                <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Accessories!.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                                <input asp-for="Accessories!.StopperSettings" class="form-control" data-history-field="Accessories.StopperSettings" />
+                                <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check-label"><input asp-for="Accessories!.RubberPads" class="form-check-input" data-history-field="Accessories.RubberPads" /> Rubber Pads</label></div>
+                            <div class="col-md-6">
+                                <label class="form-check-label"><input asp-for="Accessories!.HeadRest" class="form-check-input" data-history-field="Accessories.HeadRest" /> Head Rest</label></div>
+                            <div class="col-md-6">
+                                <label class="form-check-label"><input asp-for="Accessories!.Towel" class="form-check-input" data-history-field="Accessories.Towel" /> Towel</label></div>
+                            <div class="col-md-6">
+                                <label class="form-check-label"><input asp-for="Accessories!.PosturePillow" class="form-check-input" data-history-field="Accessories.PosturePillow" /> Posture Pillow</label></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="detailFields mt-3">
+                            <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadPad">@Model.Accessories!.HeadPad</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Accessories.StrapsOrHandles">@Model.Accessories.StrapsOrHandles</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Accessories.GearBar">@Model.Accessories.GearBar</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Accessories.StopperSettings">@Model.Accessories.StopperSettings</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Accessories.RubberPads)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Accessories.HeadRest)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Accessories.Towel" data-history-format="yesno">@YesNo(Model.Accessories.Towel)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Accessories.PosturePillow)</div></div>
+                        </div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <div class="workflowSectionHint">
+                        <strong>Client 2</strong>
+                    </div>
+                    @if (activeStage == SessionStatus.Logged)
+                    {
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label asp-for="Client2Accessories.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                                <select asp-for="Client2Accessories.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Client2Accessories.HeadPad">
+                                    <option value="">Select a head rest option</option>
+                                </select>
+                                <span asp-validation-for="Client2Accessories!.HeadPad" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Client2Accessories.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                                <select asp-for="Client2Accessories.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Client2Accessories.StrapsOrHandles">
+                                    <option value="">Select a strap or handle option</option>
+                                </select>
+                                <span asp-validation-for="Client2Accessories!.StrapsOrHandles" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Client2Accessories.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                                <input asp-for="Client2Accessories.GearBar" class="form-control" data-history-field="Client2Accessories.GearBar" />
+                                <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Client2Accessories.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                                <input asp-for="Client2Accessories.StopperSettings" class="form-control" data-history-field="Client2Accessories.StopperSettings" />
+                                <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.RubberPads" class="form-check-input" data-history-field="Client2Accessories.RubberPads" /> Rubber Pads</label></div>
+                            <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.HeadRest" class="form-check-input" data-history-field="Client2Accessories.HeadRest" /> Head Rest</label></div>
+                            <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.Towel" class="form-check-input" data-history-field="Client2Accessories.Towel" /> Towel</label></div>
+                            <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.PosturePillow" class="form-check-input" data-history-field="Client2Accessories.PosturePillow" /> Posture Pillow</label></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="detailFields mt-3">
+                            <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Client2Accessories.HeadPad">@Model.Client2Accessories!.HeadPad</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Client2Accessories.StrapsOrHandles">@Model.Client2Accessories.StrapsOrHandles</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Client2Accessories.GearBar">@Model.Client2Accessories.GearBar</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Client2Accessories.StopperSettings">@Model.Client2Accessories.StopperSettings</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Client2Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Client2Accessories.RubberPads)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Client2Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Client2Accessories.HeadRest)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Client2Accessories.Towel" data-history-format="yesno">@YesNo(Model.Client2Accessories.Towel)</div></div>
+                            <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Client2Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Client2Accessories.PosturePillow)</div></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (activeStage == SessionStatus.Logged)
+        {
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Accessories!.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                    <select asp-for="Accessories!.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Accessories.HeadPad">
+                        <option value="">Select a head rest option</option>
+                    </select>
+                    <span asp-validation-for="Accessories!.HeadPad" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Accessories!.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                    <select asp-for="Accessories!.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Accessories.StrapsOrHandles">
+                        <option value="">Select a strap or handle option</option>
+                    </select>
+                    <span asp-validation-for="Accessories!.StrapsOrHandles" class="text-danger"></span>
+                </div>
+                <div class="col-md-3"><label asp-for="Accessories!.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="Accessories!.GearBar" class="form-control" data-history-field="Accessories.GearBar" />
+                    <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                </div>
+                <div class="col-md-3"><label asp-for="Accessories!.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="Accessories!.StopperSettings" class="form-control" data-history-field="Accessories.StopperSettings" />
+                    <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                </div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.RubberPads" class="form-check-input" data-history-field="Accessories.RubberPads" /> Rubber Pads</label></div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.HeadRest" class="form-check-input" data-history-field="Accessories.HeadRest" /> Head Rest</label></div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.Towel" class="form-check-input" data-history-field="Accessories.Towel" /> Towel</label></div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.PosturePillow" class="form-check-input" data-history-field="Accessories.PosturePillow" /> Posture Pillow</label></div>
+            </div>
+        }
+        else
+        {
+            <div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadPad">@Model.Accessories!.HeadPad</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Accessories.StrapsOrHandles">@Model.Accessories.StrapsOrHandles</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Accessories.GearBar">@Model.Accessories.GearBar</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Accessories.StopperSettings">@Model.Accessories.StopperSettings</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Accessories.RubberPads)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Accessories.HeadRest)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Accessories.Towel" data-history-format="yesno">@YesNo(Model.Accessories.Towel)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Accessories.PosturePillow)</div></div>
+            </div>
+        }
+    }
+
+    async Task RenderExercisesBody()
+    {
+        var primaryActions = Model.ExistingActions
+            .Where(a => a.SessionClientID == Model.PrimarySessionClientID
+                || a.SessionClient?.ParticipantOrder == 1)
+            .OrderBy(a => a.ID)
+            .ToList();
+        var secondaryActions = Model.ExistingActions
+            .Where(a => a.SessionClientID == Model.SecondarySessionClientID
+                || a.SessionClient?.ParticipantOrder == 2)
+            .OrderBy(a => a.ID)
+            .ToList();
+
+        if (activeStage == SessionStatus.Logged)
+        {
+            <span asp-validation-for="SelectedExerciseIDs" class="text-danger"></span>
+            @if (isSemiPrivate)
+            {
+                @foreach (var participantActions in new[] {
+                    ("Client 1", Model.PrimarySessionClientID, primaryActions),
+                    ("Client 2", Model.SecondarySessionClientID, secondaryActions)
+                })
+                {
+                    <div class="actionsParticipantHeader">
+                        <h3 class="sectionCardTitle mb-0" style="font-size: 1.05rem;">@participantActions.Item1</h3>
+                        <button type="submit" name="Status" value="@activeStage" data-add-action-session-client-id="@participantActions.Item2" class="mu-btn mu-btn-primary mu-btn-sm">+ Add Excercise</button>
+                    </div>
+                    @if (participantActions.Item3.Any())
+                    {
+                        <div class="actionGridCompact" style="margin-bottom: 16px;">
+                            @foreach (var action in participantActions.Item3)
+                            {
+                                <div class="actionCardCompact">
+                                    <h4 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                    @if (action.Exercise?.Apparatus != null)
+                                    {
+                                        <div class="actionMetaRow"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Springs))
+                                    {
+                                        <div class="actionMetaRow"><strong>Springs:</strong> @action.Springs</div>
+                                    }
+                                    @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                    {
+                                        <div class="actionMetaRow"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Notes))
+                                    {
+                                        <div class="actionNotesCompact"><strong>Notes:</strong> @action.Notes</div>
+                                    }
+                                    <div class="actionFooterCompact">
+                                        <a asp-action="EditAction" asp-route-id="@action.ID" class="mu-btn mu-btn-primary mu-btn-sm">Edit</a>
+                                        <a asp-action="DeleteAction" asp-route-id="@action.ID" class="mu-btn mu-btn-danger mu-btn-sm" onclick="return confirm('Are you sure?')">Delete</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="detailEmpty">No Excercises have been added yet.</p>
+                    }
+                }
+            }
+            else
+            {
+                @if (primaryActions.Any())
+                {
+                    <div class="actionGridCompact">
+                        @foreach (var action in primaryActions)
+                        {
+                            <div class="actionCardCompact">
+                                <h4 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                @if (action.Exercise?.Apparatus != null)
+                                {
+                                    <div class="actionMetaRow"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                }
+                                @if (!string.IsNullOrEmpty(action.Springs))
+                                {
+                                    <div class="actionMetaRow"><strong>Springs:</strong> @action.Springs</div>
+                                }
+                                @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                {
+                                    <div class="actionMetaRow"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                }
+                                @if (!string.IsNullOrEmpty(action.Notes))
+                                {
+                                    <div class="actionNotesCompact"><strong>Notes:</strong> @action.Notes</div>
+                                }
+                                <div class="actionFooterCompact">
+                                    <a asp-action="EditAction" asp-route-id="@action.ID" class="mu-btn mu-btn-primary mu-btn-sm">Edit</a>
+                                    <a asp-action="DeleteAction" asp-route-id="@action.ID" class="mu-btn mu-btn-danger mu-btn-sm" onclick="return confirm('Are you sure?')">Delete</a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="detailEmpty">No Excercises have been added yet.</p>
+                }
+            }
+        }
+        else if (isSemiPrivate)
+        {
+            @foreach (var participantActions in new[] { ("Client 1", primaryActions), ("Client 2", secondaryActions) })
+            {
+                <h3 class="sectionCardTitle" style="font-size: 1.05rem; margin-bottom: 12px;">@participantActions.Item1</h3>
+                @if (participantActions.Item2.Any())
+                {
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 16px;">
+                        @foreach (var action in participantActions.Item2)
+                        {
+                            <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                                <h4 style="margin-top: 0; margin-bottom: 10px;">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                @if (action.Exercise?.Apparatus != null)
+                                {
+                                    <div style="margin-bottom: 8px;"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                }
+                                @if (!string.IsNullOrEmpty(action.Springs))
+                                {
+                                    <div style="margin-bottom: 8px;"><strong>Springs:</strong> @action.Springs</div>
+                                }
+                                @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                {
+                                    <div style="margin-bottom: 8px;"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                }
+                                @if (!string.IsNullOrEmpty(action.Notes))
+                                {
+                                    <div style="margin-bottom: 10px; background-color: white; padding: 8px; border-radius: 3px; border-left: 3px solid #007bff;"><strong>Notes:</strong> @action.Notes</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="detailEmpty">No Excercises have been added yet.</p>
+                }
+            }
+        }
+        else if (primaryActions.Any())
+        {
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                @foreach (var action in primaryActions)
+                {
+                    <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                        @if (action.Exercise?.Apparatus != null)
+                        {
+                            <div style="margin-bottom: 8px;"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                        }
+                        @if (!string.IsNullOrEmpty(action.Springs))
+                        {
+                            <div style="margin-bottom: 8px;"><strong>Springs:</strong> @action.Springs</div>
+                        }
+                        @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                        {
+                            <div style="margin-bottom: 8px;"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                        }
+                        @if (!string.IsNullOrEmpty(action.Notes))
+                        {
+                            <div style="margin-bottom: 10px; background-color: white; padding: 8px; border-radius: 3px; border-left: 3px solid #007bff;"><strong>Notes:</strong> @action.Notes</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="detailEmpty">No Excercises have been added yet.</p>
+        }
+    }
+
+    async Task RenderNextStepsBody()
+    {
+        if (activeStage == SessionStatus.Logged)
+        {
+            <div class="row g-3">
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.NextAppointmentBooked" class="form-check-input" data-history-field="NextSteps.NextAppointmentBooked" /> Next Appointment Booked</label></div>
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.CommunicatedProgress" class="form-check-input" data-history-field="NextSteps.CommunicatedProgress" /> Communicated Progress</label></div>
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.ReadyToProgress" class="form-check-input" data-history-field="NextSteps.ReadyToProgress" /> Ready to Progress</label></div>
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.CourseCorrectionNeeded" class="form-check-input" data-history-field="NextSteps.CourseCorrectionNeeded" /> Course Correction Needed</label></div>
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.TeamConsult" class="form-check-input" data-history-field="NextSteps.TeamConsult" /> Team Consult</label></div>
+                <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.ReferredExternally" class="form-check-input" data-history-field="NextSteps.ReferredExternally" /> Referred Externally</label></div>
+                <div class="col-md-6">
+                    <label asp-for="NextSteps.ReferredTo" class="form-label"></label>
+                    <input asp-for="NextSteps.ReferredTo" class="form-control" data-history-field="NextSteps.ReferredTo" />
+                    <span asp-validation-for="NextSteps.ReferredTo" class="text-danger"></span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Next Appointment Booked</span><div class="detailFieldValue" data-history-field="NextSteps.NextAppointmentBooked" data-history-format="yesno">@YesNo(Model.NextSteps.NextAppointmentBooked)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Communicated Progress</span><div class="detailFieldValue" data-history-field="NextSteps.CommunicatedProgress" data-history-format="yesno">@YesNo(Model.NextSteps.CommunicatedProgress)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Ready to Progress</span><div class="detailFieldValue" data-history-field="NextSteps.ReadyToProgress" data-history-format="yesno">@YesNo(Model.NextSteps.ReadyToProgress)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Course Correction Needed</span><div class="detailFieldValue" data-history-field="NextSteps.CourseCorrectionNeeded" data-history-format="yesno">@YesNo(Model.NextSteps.CourseCorrectionNeeded)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Team Consult</span><div class="detailFieldValue" data-history-field="NextSteps.TeamConsult" data-history-format="yesno">@YesNo(Model.NextSteps.TeamConsult)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Referred Externally</span><div class="detailFieldValue" data-history-field="NextSteps.ReferredExternally" data-history-format="yesno">@YesNo(Model.NextSteps.ReferredExternally)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Referred To</span><div class="detailFieldValue" data-history-field="NextSteps.ReferredTo">@(string.IsNullOrWhiteSpace(Model.NextSteps.ReferredTo) ? "-" : Model.NextSteps.ReferredTo)</div></div>
+            </div>
+        }
+    }
+
+    async Task RenderPhysioInfoBody()
+    {
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="PhysioInfo!.PhysioAssessment" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.PhysioAssessment" class="form-control" data-history-field="PhysioInfo.PhysioAssessment" />
+                <span asp-validation-for="PhysioInfo!.PhysioAssessment" class="text-danger"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="PhysioInfo!.InsuranceCompany" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.InsuranceCompany" class="form-control" data-history-field="PhysioInfo.InsuranceCompany" />
+                <span asp-validation-for="PhysioInfo!.InsuranceCompany" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PhysioInfo!.CoverageAmountPerYear" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.CoverageAmountPerYear" class="form-control" type="number" step="0.01" data-history-field="PhysioInfo.CoverageAmountPerYear" />
+                <span asp-validation-for="PhysioInfo!.CoverageAmountPerYear" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PhysioInfo!.AmountUsed" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.AmountUsed" class="form-control" type="number" step="0.01" data-history-field="PhysioInfo.AmountUsed" />
+                <span asp-validation-for="PhysioInfo!.AmountUsed" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PhysioInfo!.CoverageResetsDate" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.CoverageResetsDate" class="form-control" type="date" lang="en-CA" data-history-field="PhysioInfo.CoverageResetsDate" />
+                <span asp-validation-for="PhysioInfo!.CoverageResetsDate" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PhysioInfo!.PhysiotherapistName" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="PhysioInfo!.PhysiotherapistName" class="form-control" data-history-field="PhysioInfo.PhysiotherapistName" />
+                <span asp-validation-for="PhysioInfo!.PhysiotherapistName" class="text-danger"></span>
+            </div>
+            <div class="col-md-3"><label class="form-check-label"><input asp-for="PhysioInfo!.CoverageShared" class="form-check-input" data-history-field="PhysioInfo.CoverageShared" /> Coverage Shared</label></div>
+            <div class="col-md-3"><label class="form-check-label"><input asp-for="PhysioInfo!.CommunicatedWithPhysio" class="form-check-input" data-history-field="PhysioInfo.CommunicatedWithPhysio" /> Communicated With Physio</label></div>
+        </div>
+    }
+
+    async Task RenderAdminCompleteBody()
+    {
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="AdminComplete.AdminInitials" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="AdminComplete.AdminInitials" class="form-control" data-history-field="AdminComplete.AdminInitials" />
+                <span asp-validation-for="AdminComplete.AdminInitials" class="text-danger"></span>
+            </div>
+            <div class="col-md-6">
+                <span class="form-label d-block" id="AdminComplete_IsPaid_Label">Has session been paid for?</span>
+                <div class="workflowChoiceGroup" role="radiogroup" aria-labelledby="AdminComplete_IsPaid_Label">
+                    <label class="workflowChoice" for="AdminComplete_IsPaid_True">
+                        <input id="AdminComplete_IsPaid_True" name="AdminComplete.IsPaid" type="radio" value="true" class="form-check-input" data-history-field="AdminComplete.IsPaid" @(Model.AdminComplete.IsPaid == true ? "checked" : null) />
+                        <span>Yes</span>
+                    </label>
+                    <label class="workflowChoice" for="AdminComplete_IsPaid_False">
+                        <input id="AdminComplete_IsPaid_False" name="AdminComplete.IsPaid" type="radio" value="false" class="form-check-input" data-history-field="AdminComplete.IsPaid" @(Model.AdminComplete.IsPaid == false ? "checked" : null) />
+                        <span>No</span>
+                    </label>
+                </div>
+                <span asp-validation-for="AdminComplete.IsPaid" class="text-danger"></span>
+            </div>
+            <div class="col-md-8">
+                <label asp-for="AdminComplete.AdminNotes" class="form-label"></label>
+                <textarea asp-for="AdminComplete.AdminNotes" class="form-control" data-history-field="AdminComplete.AdminNotes"></textarea>
+            </div>
+        </div>
+    }
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Edit Session</h1>
+</div>
+
+<partial name="_SessionWorkflowProgress" model="activeStage" />
+
+<div class="detailSummaryGrid mb-4">
+    <div class="detailSummaryCard">
+        <span class="detailSummaryLabel">Workflow Status</span>
+        <span class="detailSummaryValue"><span class="@workflowBadgeClass(currentStatus)">@currentStatus</span></span>
+    </div>
+    <div class="detailSummaryCard">
+        <span class="detailSummaryLabel">Record Status</span>
+        <span class="detailSummaryValue">@recordStatus</span>
+    </div>
+    <div class="detailSummaryCard">
+        <span class="detailSummaryLabel">Session Date (YYYY-MM-DD)</span>
+        <span class="detailSummaryValue">@Model.SessionDate.ToString("yyyy-MM-dd")</span>
+    </div>
+    <div class="detailSummaryCard">
+        <span class="detailSummaryLabel">Session Type</span>
+        <span class="detailSummaryValue">@Model.SessionType</span>
+    </div>
+</div>
+
+<style>
+    .editShell.history-reference-mode .form-control[data-history-field],
+    .editShell.history-reference-mode .form-check-input[data-history-field],
+    .editShell.history-reference-mode .workflowChoice,
+    .editShell.history-reference-mode .detailFieldValue[data-history-field],
+    .editShell.history-reference-mode .detailTextValue[data-history-field] {
+        color: #6c757d;
+    }
+
+    .editShell.history-reference-mode .form-control[data-history-field],
+    .editShell.history-reference-mode .workflowChoice {
+        background-color: #f3f4f6;
+        border-color: #d7dde5;
+    }
+
+    .editShell.history-reference-mode .form-check-input[data-history-field] {
+        opacity: 0.65;
+    }
+
+    .history-disabled-action {
+        pointer-events: none;
+    }
+
+    .editShell.history-reference-mode button:disabled:not(.historyNavButton),
+    .editShell.history-reference-mode .history-disabled-action {
+        opacity: 0.45;
+        cursor: not-allowed;
+        box-shadow: none;
+        filter: saturate(0.35);
+    }
+
+    .historyViewerCard.is-compact {
+        background: #fbfbfc;
+        border-color: #e6e8ec;
+        padding-bottom: 0.9rem;
+    }
+
+    .historyViewerCard.is-compact .sectionCardTitle {
+        font-size: 1rem;
+    }
+
+    .historyViewerCard.is-compact .fieldNote {
+        font-size: 0.92rem;
+    }
+
+    .generalInfoCard.is-compact .detailFields {
+        gap: 0.75rem 1rem;
+    }
+
+    .generalInfoCard.is-compact .detailFieldValue {
+        font-size: 0.95rem;
+    }
+
+    .loggedSection .sectionCardHeader {
+        align-items: center;
+    }
+
+    .actionsHeaderMeta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .actionsParticipantHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .actionGridCompact {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+    }
+
+    .actionCardCompact {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 12px;
+        background-color: #f9f9f9;
+    }
+
+    .actionCardTitle {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+    }
+
+    .actionMetaRow {
+        margin-bottom: 0.35rem;
+        font-size: 0.95rem;
+    }
+
+    .actionNotesCompact {
+        margin: 0.65rem 0 0;
+        padding: 0.65rem 0.75rem;
+        background-color: white;
+        border-radius: 6px;
+        border-left: 3px solid #007bff;
+    }
+
+    .actionFooterCompact {
+        display: flex;
+        gap: 8px;
+        padding-top: 0.75rem;
+        margin-top: 0.75rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .historyViewerMeta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1rem;
+        margin-top: 0.65rem;
+    }
+
+    .historyViewerMetaItem {
+        font-size: 0.92rem;
+        color: #5f6b7a;
+    }
+
+    .historyNavButton:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+
+</style>
+
+<form asp-action="Edit" class="sectionStack editShell" id="pageForm">
+    <input type="hidden" asp-for="ID" />
+    <input type="hidden" asp-for="PrimarySessionClientID" />
+    <input type="hidden" asp-for="SecondarySessionClientID" />
+    <input type="hidden" id="addActionSessionClientId" name="addActionSessionClientId" />
+
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    @if (useCompletionAccordionLayout)
+    {
+        @if (!string.IsNullOrWhiteSpace(completedOnlyAccessMessage))
+        {
+            <div class="formSectionCard">
+                <p class="mb-0">@completedOnlyAccessMessage</p>
+            </div>
+        }
+
+        <div class="accordion detailAccordion mb-4" id="sessionEditCompletionAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEditGeneralInfo">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditGeneralInfo" aria-expanded="false" aria-controls="collapseEditGeneralInfo">General Info</button>
+                </h2>
+                <div id="collapseEditGeneralInfo" class="accordion-collapse collapse" aria-labelledby="headingEditGeneralInfo">
+                    <div class="accordion-body">
+                        @{
+                            await RenderGeneralInfoBody();
+                        }
+                    </div>
+                </div>
+            </div>
+            @if (showLaterStageSections)
+            {
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditSessionNotes">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditSessionNotes" aria-expanded="false" aria-controls="collapseEditSessionNotes">Session Notes</button>
+                    </h2>
+                    <div id="collapseEditSessionNotes" class="accordion-collapse collapse" aria-labelledby="headingEditSessionNotes">
+                        <div class="accordion-body">
+                            @{
+                                await RenderSessionNotesBody();
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditAccessories">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditAccessories" aria-expanded="false" aria-controls="collapseEditAccessories">Accessories</button>
+                    </h2>
+                    <div id="collapseEditAccessories" class="accordion-collapse collapse" aria-labelledby="headingEditAccessories">
+                        <div class="accordion-body">
+                            @{
+                                await RenderAccessoriesBody();
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditExercises">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditExercises" aria-expanded="false" aria-controls="collapseEditExercises">Excercises</button>
+                    </h2>
+                    <div id="collapseEditExercises" class="accordion-collapse collapse" aria-labelledby="headingEditExercises">
+                        <div class="accordion-body">
+                            <div id="historyActionsContainer">
+                                @{
+                                    await RenderExercisesBody();
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditNextSteps">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditNextSteps" aria-expanded="false" aria-controls="collapseEditNextSteps">Next Steps</button>
+                    </h2>
+                    <div id="collapseEditNextSteps" class="accordion-collapse collapse" aria-labelledby="headingEditNextSteps">
+                        <div class="accordion-body">
+                            @{
+                                await RenderNextStepsBody();
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            <div class="accordion-item" data-history-viewer-container hidden>
+                <h2 class="accordion-header" id="headingEditHistory">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditHistory" aria-expanded="true" aria-controls="collapseEditHistory">Previous Session Viewer</button>
+                </h2>
+                <div id="collapseEditHistory" class="accordion-collapse collapse show" aria-labelledby="headingEditHistory">
+                    <div class="accordion-body">
+                        @{
+                            await RenderPreviousSessionViewerBody();
+                        }
+                    </div>
+                </div>
+            </div>
+            @if (activeStage == SessionStatus.Completed && isPhysio)
+            {
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditPhysioInfo">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditPhysioInfo" aria-expanded="true" aria-controls="collapseEditPhysioInfo">Physio Info</button>
+                    </h2>
+                    <div id="collapseEditPhysioInfo" class="accordion-collapse collapse show" aria-labelledby="headingEditPhysioInfo">
+                        <div class="accordion-body">
+                            @{
+                                await RenderPhysioInfoBody();
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (activeStage == SessionStatus.Completed)
+            {
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEditAdminComplete">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEditAdminComplete" aria-expanded="true" aria-controls="collapseEditAdminComplete">Admin Complete</button>
+                    </h2>
+                    <div id="collapseEditAdminComplete" class="accordion-collapse collapse show" aria-labelledby="headingEditAdminComplete">
+                        <div class="accordion-body">
+                            @{
+                                await RenderAdminCompleteBody();
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+    <div class="formSectionCard generalInfoCard @(isLoggedStage ? "is-compact" : null)">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">General Info</h2>
+        </div>
+        @if (allowGeneralInfoEditing)
+        {
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="SessionType" class="form-label"></label>
+                    <select asp-for="SessionType" class="form-control" asp-items="Html.GetEnumSelectList<SessionType>()"></select>
+                    <span asp-validation-for="SessionType" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SessionDate" class="form-label"></label>
+                    <input asp-for="SessionDate" class="form-control" type="date" lang="en-CA" />
+                    <span asp-validation-for="SessionDate" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="TrainerID" class="form-label"></label>
+                    <select asp-for="TrainerID" class="form-control" asp-items="ViewBag.TrainerID">
+                            <option value="">Select a Teacher</option>
+                    </select>
+                    <span asp-validation-for="TrainerID" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="ClientID" class="form-label"></label>
+                    <select asp-for="ClientID" class="form-control" asp-items="ViewBag.ClientID">
+                        <option value="">Select a Client</option>
+                    </select>
+                    <span asp-validation-for="ClientID" class="text-danger"></span>
+                </div>
+                <div class="col-md-4 semiPrivateOnly">
+                    <label asp-for="Client2ID" class="form-label"></label>
+                    <select asp-for="Client2ID" class="form-control" asp-items="ViewBag.ClientID">
+                        <option value="">Select a Second Client</option>
+                    </select>
+                    <span asp-validation-for="Client2ID" class="text-danger"></span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Session Type</span><div class="detailFieldValue">@Model.SessionType</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Session Date (YYYY-MM-DD)</span><div class="detailFieldValue">@Model.SessionDate.ToString("yyyy-MM-dd")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Teacher</span><div class="detailFieldValue">@LookupText(ViewBag.TrainerID, Model.TrainerID)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Client</span><div class="detailFieldValue">@LookupText(ViewBag.ClientID, Model.ClientID)</div></div>
+                @if (isSemiPrivate)
+                {
+                    <div class="detailField"><span class="detailFieldLabel">Client 2</span><div class="detailFieldValue">@LookupText(ViewBag.ClientID, Model.Client2ID)</div></div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (currentStatus == SessionStatus.Opened)
+    {
+        <div class="formSectionCard historyViewerCard @(isLoggedStage ? "is-compact" : null)" data-history-viewer-container hidden>
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Previous Session Viewer</h2>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" id="historyPreviousButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Previous</button>
+                <button type="button" id="historyNextButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Next</button>
+                <span id="historyStatusLabel" class="fieldNote mb-0">Current session values</span>
+            </div>
+            <div class="historyViewerMeta">
+                <span id="historyCountLabel" class="historyViewerMetaItem">Previous Sessions: -</span>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(completedOnlyAccessMessage))
+    {
+        <div class="formSectionCard">
+            <p class="mb-0">@completedOnlyAccessMessage</p>
+        </div>
+    }
+
+    @if (showOpenedFutureDateMessage || showOpenedRoleMessage)
+    {
+        <div class="formSectionCard">
+            <p class="mb-0">
+                @(showOpenedFutureDateMessage
+                    ? "This session cannot be moved to Logged yet because the session date is in the future. Logged sessions must be dated today or earlier."
+                    : "This session is currently Opened. Logged-stage work is not available for your account.")
+            </p>
+        </div>
+    }
+
+    @if (showLaterStageSections)
+    {
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Session Notes</h2>
+            </div>
+            @if (isSemiPrivate)
+            {
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="workflowSectionHint">
+                            <strong>Client 1</strong>
+                        </div>
+                        @if (activeStage == SessionStatus.Logged)
+                        {
+                            <div class="row g-3 mt-1">
+                                <div class="col-12">
+                                        <label asp-for="SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="SessionNotes.Goals" class="form-control" data-history-field="SessionNotes.Goals"></textarea>
+                                    <span asp-validation-for="SessionNotes.Goals" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="SessionsPerWeekRecommended" class="form-label"></label><span class="text-danger"> *</span>
+                                    <input asp-for="SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="SessionsPerWeekRecommended" />
+                                    <span asp-validation-for="SessionsPerWeekRecommended" class="text-danger"></span>
+                                </div>
+                                <div class="col-12"><label asp-for="SessionNotes.GeneralComments" class="form-label"></label><textarea asp-for="SessionNotes.GeneralComments" class="form-control" data-history-field="SessionNotes.GeneralComments"></textarea></div>
+                                <div class="col-12">
+                                        <label asp-for="SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="SessionNotes.SubjectiveReports" class="form-control" data-history-field="SessionNotes.SubjectiveReports"></textarea>
+                                    <span asp-validation-for="SessionNotes.SubjectiveReports" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="SessionNotes.ObjectiveFindings" class="form-control" data-history-field="SessionNotes.ObjectiveFindings"></textarea>
+                                    <span asp-validation-for="SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="SessionNotes.Plan" class="form-control" data-history-field="SessionNotes.Plan"></textarea>
+                                    <span asp-validation-for="SessionNotes.Plan" class="text-danger"></span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Goals) ? "-" : Model.SessionNotes.Goals)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="SessionsPerWeekRecommended">@(Model.SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.SessionNotes.GeneralComments) ? "-" : Model.SessionNotes.GeneralComments)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.SessionNotes.SubjectiveReports) ? "-" : Model.SessionNotes.SubjectiveReports)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.SessionNotes.ObjectiveFindings) ? "-" : Model.SessionNotes.ObjectiveFindings)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Plan) ? "-" : Model.SessionNotes.Plan)</div></div>
+                            </div>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <div class="workflowSectionHint">
+                            <strong>Client 2</strong>
+                        </div>
+                        @if (activeStage == SessionStatus.Logged)
+                        {
+                            <div class="row g-3 mt-1">
+                                <div class="col-12">
+                                        <label asp-for="Client2SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="Client2SessionNotes.Goals" class="form-control" data-history-field="Client2SessionNotes.Goals"></textarea>
+                                    <span asp-validation-for="Client2SessionNotes.Goals" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label for="Client2SessionsPerWeekRecommended" class="form-label">Sessions/Week</label><span class="text-danger"> *</span>
+                                    <input asp-for="Client2SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="Client2SessionsPerWeekRecommended" />
+                                    <span asp-validation-for="Client2SessionsPerWeekRecommended" class="text-danger"></span>
+                                </div>
+                                <div class="col-12"><label asp-for="Client2SessionNotes.GeneralComments" class="form-label"></label><textarea asp-for="Client2SessionNotes.GeneralComments" class="form-control" data-history-field="Client2SessionNotes.GeneralComments"></textarea></div>
+                                <div class="col-12">
+                                        <label asp-for="Client2SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="Client2SessionNotes.SubjectiveReports" class="form-control" data-history-field="Client2SessionNotes.SubjectiveReports"></textarea>
+                                    <span asp-validation-for="Client2SessionNotes.SubjectiveReports" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="Client2SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="Client2SessionNotes.ObjectiveFindings" class="form-control" data-history-field="Client2SessionNotes.ObjectiveFindings"></textarea>
+                                    <span asp-validation-for="Client2SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="Client2SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                                    <textarea asp-for="Client2SessionNotes.Plan" class="form-control" data-history-field="Client2SessionNotes.Plan"></textarea>
+                                    <span asp-validation-for="Client2SessionNotes.Plan" class="text-danger"></span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.Goals) ? "-" : Model.Client2SessionNotes!.Goals)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="Client2SessionsPerWeekRecommended">@(Model.Client2SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.GeneralComments) ? "-" : Model.Client2SessionNotes!.GeneralComments)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.SubjectiveReports) ? "-" : Model.Client2SessionNotes!.SubjectiveReports)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.ObjectiveFindings) ? "-" : Model.Client2SessionNotes!.ObjectiveFindings)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="Client2SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.Client2SessionNotes?.Plan) ? "-" : Model.Client2SessionNotes!.Plan)</div></div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (activeStage == SessionStatus.Logged)
+            {
+                <div class="row g-3">
+                    <div class="col-md-8">
+                            <label asp-for="SessionNotes.Goals" class="form-label"></label><span class="text-danger"> *</span>
+                        <textarea asp-for="SessionNotes.Goals" class="form-control" data-history-field="SessionNotes.Goals"></textarea>
+                        <span asp-validation-for="SessionNotes.Goals" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                            <label asp-for="SessionsPerWeekRecommended" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="SessionsPerWeekRecommended" class="form-control" min="1" data-history-field="SessionsPerWeekRecommended" />
+                        <span asp-validation-for="SessionsPerWeekRecommended" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6"><label asp-for="SessionNotes.GeneralComments" class="form-label"></label><textarea asp-for="SessionNotes.GeneralComments" class="form-control" data-history-field="SessionNotes.GeneralComments"></textarea></div>
+                    <div class="col-md-6">
+                            <label asp-for="SessionNotes.SubjectiveReports" class="form-label"></label><span class="text-danger"> *</span>
+                        <textarea asp-for="SessionNotes.SubjectiveReports" class="form-control" data-history-field="SessionNotes.SubjectiveReports"></textarea>
+                        <span asp-validation-for="SessionNotes.SubjectiveReports" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                            <label asp-for="SessionNotes.ObjectiveFindings" class="form-label"></label><span class="text-danger"> *</span>
+                        <textarea asp-for="SessionNotes.ObjectiveFindings" class="form-control" data-history-field="SessionNotes.ObjectiveFindings"></textarea>
+                        <span asp-validation-for="SessionNotes.ObjectiveFindings" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                            <label asp-for="SessionNotes.Plan" class="form-label"></label><span class="text-danger"> *</span>
+                        <textarea asp-for="SessionNotes.Plan" class="form-control" data-history-field="SessionNotes.Plan"></textarea>
+                        <span asp-validation-for="SessionNotes.Plan" class="text-danger"></span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="detailFields">
+                    <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Goals">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Goals) ? "-" : Model.SessionNotes.Goals)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue" data-history-field="SessionsPerWeekRecommended">@(Model.SessionsPerWeekRecommended?.ToString() ?? "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.GeneralComments">@(string.IsNullOrWhiteSpace(Model.SessionNotes.GeneralComments) ? "-" : Model.SessionNotes.GeneralComments)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.SubjectiveReports">@(string.IsNullOrWhiteSpace(Model.SessionNotes.SubjectiveReports) ? "-" : Model.SessionNotes.SubjectiveReports)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.ObjectiveFindings">@(string.IsNullOrWhiteSpace(Model.SessionNotes.ObjectiveFindings) ? "-" : Model.SessionNotes.ObjectiveFindings)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue" data-history-field="SessionNotes.Plan">@(string.IsNullOrWhiteSpace(Model.SessionNotes.Plan) ? "-" : Model.SessionNotes.Plan)</div></div>
+                </div>
+            }
+        </div>
+
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Accessories</h2>
+            </div>
+            @if (isSemiPrivate)
+            {
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="workflowSectionHint">
+                            <strong>Client 1</strong>
+                        </div>
+                        @if (activeStage == SessionStatus.Logged)
+                        {
+                            <div class="row g-3 mt-1">
+                                <div class="col-12">
+                                        <label asp-for="Accessories!.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                                        <select asp-for="Accessories!.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Accessories.HeadPad">
+                                            <option value="">Select a head rest option</option>
+                                        </select>
+                                        <span asp-validation-for="Accessories!.HeadPad" class="text-danger"></span>
+                                </div>
+                                <div class="col-12">
+                                        <label asp-for="Accessories!.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                                        <select asp-for="Accessories!.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Accessories.StrapsOrHandles">
+                                            <option value="">Select a strap or handle option</option>
+                                        </select>
+                                        <span asp-validation-for="Accessories!.StrapsOrHandles" class="text-danger"></span>
+                                    </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Accessories!.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                                    <input asp-for="Accessories!.GearBar" class="form-control" data-history-field="Accessories.GearBar" />
+                                    <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Accessories!.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                                    <input asp-for="Accessories!.StopperSettings" class="form-control" data-history-field="Accessories.StopperSettings" />
+                                    <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                                </div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Accessories!.RubberPads" class="form-check-input" data-history-field="Accessories.RubberPads" /> Rubber Pads</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Accessories!.HeadRest" class="form-check-input" data-history-field="Accessories.HeadRest" /> Head Rest</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Accessories!.Towel" class="form-check-input" data-history-field="Accessories.Towel" /> Towel</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Accessories!.PosturePillow" class="form-check-input" data-history-field="Accessories.PosturePillow" /> Posture Pillow</label></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadPad">@Model.Accessories!.HeadPad</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Accessories.StrapsOrHandles">@Model.Accessories.StrapsOrHandles</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Accessories.GearBar">@Model.Accessories.GearBar</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Accessories.StopperSettings">@Model.Accessories.StopperSettings</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Accessories.RubberPads)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Accessories.HeadRest)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Accessories.Towel" data-history-format="yesno">@YesNo(Model.Accessories.Towel)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Accessories.PosturePillow)</div></div>
+                            </div>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <div class="workflowSectionHint">
+                            <strong>Client 2</strong>
+                        </div>
+                        @if (activeStage == SessionStatus.Logged)
+                        {
+                            <div class="row g-3 mt-1">
+                                <div class="col-12">
+                                        <label asp-for="Client2Accessories.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                                        <select asp-for="Client2Accessories.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Client2Accessories.HeadPad">
+                                            <option value="">Select a head rest option</option>
+                                        </select>
+                                        <span asp-validation-for="Client2Accessories!.HeadPad" class="text-danger"></span>
+                                    </div>
+                                <div class="col-12">
+                                        <label asp-for="Client2Accessories.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                                        <select asp-for="Client2Accessories.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Client2Accessories.StrapsOrHandles">
+                                            <option value="">Select a strap or handle option</option>
+                                        </select>
+                                        <span asp-validation-for="Client2Accessories!.StrapsOrHandles" class="text-danger"></span>
+                                    </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Client2Accessories.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                                    <input asp-for="Client2Accessories.GearBar" class="form-control" data-history-field="Client2Accessories.GearBar" />
+                                    <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                                    </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Client2Accessories.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                                        <input asp-for="Client2Accessories.StopperSettings" class="form-control" data-history-field="Client2Accessories.StopperSettings" />
+                                        <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                                    </div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.RubberPads" class="form-check-input" data-history-field="Client2Accessories.RubberPads" /> Rubber Pads</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.HeadRest" class="form-check-input" data-history-field="Client2Accessories.HeadRest" /> Head Rest</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.Towel" class="form-check-input" data-history-field="Client2Accessories.Towel" /> Towel</label></div>
+                                <div class="col-md-6"><label class="form-check-label"><input asp-for="Client2Accessories.PosturePillow" class="form-check-input" data-history-field="Client2Accessories.PosturePillow" /> Posture Pillow</label></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Client2Accessories.HeadPad">@Model.Client2Accessories!.HeadPad</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Client2Accessories.StrapsOrHandles">@Model.Client2Accessories.StrapsOrHandles</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Client2Accessories.GearBar">@Model.Client2Accessories.GearBar</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Client2Accessories.StopperSettings">@Model.Client2Accessories.StopperSettings</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Client2Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Client2Accessories.RubberPads)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Client2Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Client2Accessories.HeadRest)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Client2Accessories.Towel" data-history-format="yesno">@YesNo(Model.Client2Accessories.Towel)</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Client2Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Client2Accessories.PosturePillow)</div></div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (activeStage == SessionStatus.Logged)
+            {
+                <div class="row g-3">
+                    <div class="col-md-6">
+                            <label asp-for="Accessories!.HeadPad" class="form-label"></label><span class="text-danger"> *</span>
+                            <select asp-for="Accessories!.HeadPad" class="form-control" asp-items="Html.GetEnumSelectList<HeadPadOption>()" data-history-field="Accessories.HeadPad">
+                                <option value="" >Select a head rest option</option>
+                            </select>
+                            <span asp-validation-for="Accessories!.HeadPad" class="text-danger"></span>
+                        </div>
+                    <div class="col-md-6">
+                            <label asp-for="Accessories!.StrapsOrHandles" class="form-label"></label><span class="text-danger"> *</span>
+                            <select asp-for="Accessories!.StrapsOrHandles" class="form-control" asp-items="Html.GetEnumSelectList<StrapOrHandleOption>()" data-history-field="Accessories.StrapsOrHandles">
+                                <option value="">Select a strap or handle option</option>
+                            </select>
+                            <span asp-validation-for="Accessories!.StrapsOrHandles" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-3"><label asp-for="Accessories!.GearBar" class="form-label"></label><span class="text-danger"> *</span>
+                            <input asp-for="Accessories!.GearBar" class="form-control" data-history-field="Accessories.GearBar" min="1" max="3" />
+                            <span asp-validation-for="Accessories!.GearBar" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-3"><label asp-for="Accessories!.StopperSettings" class="form-label"></label><span class="text-danger"> *</span>
+                            <input asp-for="Accessories!.StopperSettings" class="form-control" data-history-field="Accessories.StopperSettings" min="1" max="6" />
+                            <span asp-validation-for="Accessories!.StopperSettings" class="text-danger"></span>
+                        </div>
+                    <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.RubberPads" class="form-check-input" data-history-field="Accessories.RubberPads" /> Rubber Pads</label></div>
+                    <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.HeadRest" class="form-check-input" data-history-field="Accessories.HeadRest" /> Head Rest</label></div>
+                    <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.Towel" class="form-check-input" data-history-field="Accessories.Towel" /> Towel</label></div>
+                    <div class="col-md-3"><label class="form-check-label"><input asp-for="Accessories!.PosturePillow" class="form-check-input" data-history-field="Accessories.PosturePillow" /> Posture Pillow</label></div>
+                </div>
+            }
+            else
+            {
+                <div class="detailFields">
+                    <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadPad">@Model.Accessories!.HeadPad</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue" data-history-field="Accessories.StrapsOrHandles">@Model.Accessories.StrapsOrHandles</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue" data-history-field="Accessories.GearBar">@Model.Accessories.GearBar</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue" data-history-field="Accessories.StopperSettings">@Model.Accessories.StopperSettings</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue" data-history-field="Accessories.RubberPads" data-history-format="yesno">@YesNo(Model.Accessories.RubberPads)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue" data-history-field="Accessories.HeadRest" data-history-format="yesno">@YesNo(Model.Accessories.HeadRest)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue" data-history-field="Accessories.Towel" data-history-format="yesno">@YesNo(Model.Accessories.Towel)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue" data-history-field="Accessories.PosturePillow" data-history-format="yesno">@YesNo(Model.Accessories.PosturePillow)</div></div>
+                </div>
+            }
+        </div>
+
+        <div class="formSectionCard @(isLoggedStage ? "loggedSection" : null)">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Excercises</h2>
+                @if (isLoggedStage && !isSemiPrivate)
+                {
+                    <button type="submit"
+                            name="@(currentStatus == SessionStatus.Opened ? "continueToAddAction" : "Status")"
+                            value="@(currentStatus == SessionStatus.Opened ? "true" : activeStage.ToString())"
+                            data-add-action-session-client-id="@Model.PrimarySessionClientID"
+                            class="mu-btn mu-btn-primary mu-btn-sm">+ Add Excercise</button>
+                }
+            </div>
+            @{
+                var primaryActions = Model.ExistingActions
+                    .Where(a => a.SessionClientID == Model.PrimarySessionClientID
+                        || a.SessionClient?.ParticipantOrder == 1)
+                    .OrderBy(a => a.ID)
+                    .ToList();
+                var secondaryActions = Model.ExistingActions
+                    .Where(a => a.SessionClientID == Model.SecondarySessionClientID
+                        || a.SessionClient?.ParticipantOrder == 2)
+                    .OrderBy(a => a.ID)
+                    .ToList();
+            }
+            @if (activeStage == SessionStatus.Logged)
+            {
+                <span asp-validation-for="SelectedExerciseIDs" class="text-danger"></span>
+                @if (isSemiPrivate)
+                {
+                    @foreach (var participantActions in new[] {
+                        ("Client 1", Model.PrimarySessionClientID, primaryActions),
+                        ("Client 2", Model.SecondarySessionClientID, secondaryActions)
+                    })
+                    {
+                        <div class="actionsParticipantHeader">
+                            <h3 class="sectionCardTitle mb-0" style="font-size: 1.05rem;">@participantActions.Item1</h3>
+                            <button type="submit"
+                                    name="@(currentStatus == SessionStatus.Opened ? "continueToAddAction" : "Status")"
+                                    value="@(currentStatus == SessionStatus.Opened ? "true" : activeStage.ToString())"
+                                    data-add-action-session-client-id="@participantActions.Item2"
+                                    class="mu-btn mu-btn-primary mu-btn-sm">+ Add Excercise</button>
+                        </div>
+                        @if (participantActions.Item3.Any())
+                        {
+                            <div class="actionGridCompact" style="margin-bottom: 16px;">
+                                @foreach (var action in participantActions.Item3)
+                                {
+                                    <div class="actionCardCompact">
+                                        <h4 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                        @if (action.Exercise?.Apparatus != null)
+                                        {
+                                            <div class="actionMetaRow"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(action.Springs))
+                                        {
+                                            <div class="actionMetaRow"><strong>Springs:</strong> @action.Springs</div>
+                                        }
+                                        @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                        {
+                                            <div class="actionMetaRow"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(action.Notes))
+                                        {
+                                            <div class="actionNotesCompact"><strong>Notes:</strong> @action.Notes</div>
+                                        }
+                                        <div class="actionFooterCompact">
+                                            <a asp-action="EditAction" asp-route-id="@action.ID" class="mu-btn mu-btn-primary mu-btn-sm">Edit</a>
+                                            <a asp-action="DeleteAction" asp-route-id="@action.ID" class="mu-btn mu-btn-danger mu-btn-sm" onclick="return confirm('Are you sure?')">Delete</a>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="detailEmpty">No Excercises have been added yet.</p>
+                        }
+                    }
+                }
+                else
+                {
+                    @if (primaryActions.Any())
+                    {
+                        <div class="actionGridCompact">
+                            @foreach (var action in primaryActions)
+                            {
+                                <div class="actionCardCompact">
+                                    <h4 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                    @if (action.Exercise?.Apparatus != null)
+                                    {
+                                        <div class="actionMetaRow"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Springs))
+                                    {
+                                        <div class="actionMetaRow"><strong>Springs:</strong> @action.Springs</div>
+                                    }
+                                    @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                    {
+                                        <div class="actionMetaRow"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Notes))
+                                    {
+                                        <div class="actionNotesCompact"><strong>Notes:</strong> @action.Notes</div>
+                                    }
+                                    <div class="actionFooterCompact">
+                                        <a asp-action="EditAction" asp-route-id="@action.ID" class="mu-btn mu-btn-primary mu-btn-sm">Edit</a>
+                                        <a asp-action="DeleteAction" asp-route-id="@action.ID" class="mu-btn mu-btn-danger mu-btn-sm" onclick="return confirm('Are you sure?')">Delete</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="detailEmpty">No Excercises have been added yet.</p>
+                    }
+                }
+            }
+            else if (isSemiPrivate)
+            {
+                @foreach (var participantActions in new[] { ("Client 1", primaryActions), ("Client 2", secondaryActions) })
+                {
+                    <h3 class="sectionCardTitle" style="font-size: 1.05rem; margin-bottom: 12px;">@participantActions.Item1</h3>
+                    @if (participantActions.Item2.Any())
+                    {
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 16px;">
+                            @foreach (var action in participantActions.Item2)
+                            {
+                                <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                                    <h4 style="margin-top: 0; margin-bottom: 10px;">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                                    @if (action.Exercise?.Apparatus != null)
+                                    {
+                                        <div style="margin-bottom: 8px;"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Springs))
+                                    {
+                                        <div style="margin-bottom: 8px;"><strong>Springs:</strong> @action.Springs</div>
+                                    }
+                                    @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                                    {
+                                        <div style="margin-bottom: 8px;"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(action.Notes))
+                                    {
+                                        <div style="margin-bottom: 10px; background-color: white; padding: 8px; border-radius: 3px; border-left: 3px solid #007bff;"><strong>Notes:</strong> @action.Notes</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="detailEmpty">No Excercises have been added yet.</p>
+                    }
+                }
+            }
+            else if (primaryActions.Any())
+            {
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+                    @foreach (var action in primaryActions)
+                    {
+                        <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                            <h4 style="margin-top: 0; margin-bottom: 10px;">@(action.Exercise?.ExerciseName ?? "Excercise")</h4>
+                            @if (action.Exercise?.Apparatus != null)
+                            {
+                                <div style="margin-bottom: 8px;"><strong>Apparatus:</strong> @action.Exercise.Apparatus.ApparatusName</div>
+                            }
+                            @if (!string.IsNullOrEmpty(action.Springs))
+                            {
+                                <div style="margin-bottom: 8px;"><strong>Springs:</strong> @action.Springs</div>
+                            }
+                            @if (action.ExerciseProps != null && action.ExerciseProps.Any())
+                            {
+                                <div style="margin-bottom: 8px;"><strong>Props:</strong> @string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name)))</div>
+                            }
+                            @if (!string.IsNullOrEmpty(action.Notes))
+                            {
+                                <div style="margin-bottom: 10px; background-color: white; padding: 8px; border-radius: 3px; border-left: 3px solid #007bff;"><strong>Notes:</strong> @action.Notes</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="detailEmpty">No Excercises have been added yet.</p>
+            }
+        </div>
+
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Next Steps</h2>
+            </div>
+            @if (activeStage == SessionStatus.Logged)
+            {
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.NextAppointmentBooked" class="form-check-input" data-history-field="NextSteps.NextAppointmentBooked" /> Next Appointment Booked</label></div>
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.CommunicatedProgress" class="form-check-input" data-history-field="NextSteps.CommunicatedProgress" /> Communicated Progress</label></div>
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.ReadyToProgress" class="form-check-input" data-history-field="NextSteps.ReadyToProgress" /> Ready to Progress</label></div>
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.CourseCorrectionNeeded" class="form-check-input" data-history-field="NextSteps.CourseCorrectionNeeded" /> Course Correction Needed</label></div>
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.TeamConsult" class="form-check-input" data-history-field="NextSteps.TeamConsult" /> Team Consult</label></div>
+                    <div class="col-md-4"><label class="form-check-label"><input asp-for="NextSteps.ReferredExternally" class="form-check-input" data-history-field="NextSteps.ReferredExternally" /> Referred Externally</label></div>
+                    <div class="col-md-6">
+                        <label asp-for="NextSteps.ReferredTo" class="form-label"></label>
+                        <input asp-for="NextSteps.ReferredTo" class="form-control" data-history-field="NextSteps.ReferredTo" />
+                        <span asp-validation-for="NextSteps.ReferredTo" class="text-danger"></span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="detailFields">
+                    <div class="detailField"><span class="detailFieldLabel">Next Appointment Booked</span><div class="detailFieldValue" data-history-field="NextSteps.NextAppointmentBooked" data-history-format="yesno">@YesNo(Model.NextSteps.NextAppointmentBooked)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Communicated Progress</span><div class="detailFieldValue" data-history-field="NextSteps.CommunicatedProgress" data-history-format="yesno">@YesNo(Model.NextSteps.CommunicatedProgress)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Ready to Progress</span><div class="detailFieldValue" data-history-field="NextSteps.ReadyToProgress" data-history-format="yesno">@YesNo(Model.NextSteps.ReadyToProgress)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Course Correction Needed</span><div class="detailFieldValue" data-history-field="NextSteps.CourseCorrectionNeeded" data-history-format="yesno">@YesNo(Model.NextSteps.CourseCorrectionNeeded)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Team Consult</span><div class="detailFieldValue" data-history-field="NextSteps.TeamConsult" data-history-format="yesno">@YesNo(Model.NextSteps.TeamConsult)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Referred Externally</span><div class="detailFieldValue" data-history-field="NextSteps.ReferredExternally" data-history-format="yesno">@YesNo(Model.NextSteps.ReferredExternally)</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Referred To</span><div class="detailFieldValue" data-history-field="NextSteps.ReferredTo">@(string.IsNullOrWhiteSpace(Model.NextSteps.ReferredTo) ? "-" : Model.NextSteps.ReferredTo)</div></div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (activeStage == SessionStatus.Completed && isPhysio)
+    {
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Physio Info</h2>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="PhysioInfo!.PhysioAssessment" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.PhysioAssessment" class="form-control" data-history-field="PhysioInfo.PhysioAssessment" />
+                        <span asp-validation-for="PhysioInfo!.PhysioAssessment" class="text-danger"></span>
+                    </div>
+                <div class="col-md-6">
+                    <label asp-for="PhysioInfo!.InsuranceCompany" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.InsuranceCompany" class="form-control" data-history-field="PhysioInfo.InsuranceCompany" />
+                        <span asp-validation-for="PhysioInfo!.InsuranceCompany" class="text-danger"></span>
+                    </div>
+                <div class="col-md-3">
+                        <label asp-for="PhysioInfo!.CoverageAmountPerYear" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.CoverageAmountPerYear" class="form-control" type="number" step="0.01" data-history-field="PhysioInfo.CoverageAmountPerYear" />
+                        <span asp-validation-for="PhysioInfo!.CoverageAmountPerYear" class="text-danger"></span>
+                    </div>
+                <div class="col-md-3">
+                        <label asp-for="PhysioInfo!.AmountUsed" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.AmountUsed" class="form-control" type="number" step="0.01" data-history-field="PhysioInfo.AmountUsed" />
+                        <span asp-validation-for="PhysioInfo!.AmountUsed" class="text-danger"></span>
+                    </div>
+                <div class="col-md-3">
+                        <label asp-for="PhysioInfo!.CoverageResetsDate" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.CoverageResetsDate" class="form-control" type="date" lang="en-CA" data-history-field="PhysioInfo.CoverageResetsDate" />
+                        <span asp-validation-for="PhysioInfo!.CoverageResetsDate" class="text-danger"></span>
+                    </div>
+                <div class="col-md-3">
+                        <label asp-for="PhysioInfo!.PhysiotherapistName" class="form-label"></label><span class="text-danger"> *</span>
+                        <input asp-for="PhysioInfo!.PhysiotherapistName" class="form-control" data-history-field="PhysioInfo.PhysiotherapistName" />
+                        <span asp-validation-for="PhysioInfo!.PhysiotherapistName" class="text-danger"></span>
+                    </div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="PhysioInfo!.CoverageShared" class="form-check-input" data-history-field="PhysioInfo.CoverageShared" /> Coverage Shared</label></div>
+                <div class="col-md-3"><label class="form-check-label"><input asp-for="PhysioInfo!.CommunicatedWithPhysio" class="form-check-input" data-history-field="PhysioInfo.CommunicatedWithPhysio" /> Communicated With Physio</label></div>
+            </div>
+        </div>
+    }
+
+    @if (currentStatus == SessionStatus.Logged)
+    {
+        <div class="formSectionCard historyViewerCard @(isLoggedStage ? "is-compact" : null)" data-history-viewer-container hidden>
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Previous Session Viewer</h2>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" id="historyPreviousButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Previous</button>
+                <button type="button" id="historyNextButton" class="mu-btn mu-btn-secondary historyNavButton" disabled>Next</button>
+                <span id="historyStatusLabel" class="fieldNote mb-0">Current session values</span>
+            </div>
+            <div class="historyViewerMeta">
+                <span id="historyCountLabel" class="historyViewerMetaItem">Previous Sessions: -</span>
+            </div>
+        </div>
+    }
+
+    @if (activeStage == SessionStatus.Completed)
+    {
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Admin Complete</h2>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                        <label asp-for="AdminComplete.AdminInitials" class="form-label"></label><span class="text-danger"> *</span>
+                    <input asp-for="AdminComplete.AdminInitials" class="form-control" data-history-field="AdminComplete.AdminInitials" />
+                    <span asp-validation-for="AdminComplete.AdminInitials" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                        <span class="form-label d-block" id="AdminComplete_IsPaid_Label">Has session been paid for?</span>
+                    <div class="workflowChoiceGroup" role="radiogroup" aria-labelledby="AdminComplete_IsPaid_Label">
+                        <label class="workflowChoice" for="AdminComplete_IsPaid_True">
+                            <input id="AdminComplete_IsPaid_True" name="AdminComplete.IsPaid" type="radio" value="true" class="form-check-input" data-history-field="AdminComplete.IsPaid" @(Model.AdminComplete.IsPaid == true ? "checked" : null) />
+                            <span>Yes</span>
+                        </label>
+                        <label class="workflowChoice" for="AdminComplete_IsPaid_False">
+                            <input id="AdminComplete_IsPaid_False" name="AdminComplete.IsPaid" type="radio" value="false" class="form-check-input" data-history-field="AdminComplete.IsPaid" @(Model.AdminComplete.IsPaid == false ? "checked" : null) />
+                            <span>No</span>
+                        </label>
+                    </div>
+                    <span asp-validation-for="AdminComplete.IsPaid" class="text-danger"></span>
+                </div>
+                <div class="col-md-8">
+                    <label asp-for="AdminComplete.AdminNotes" class="form-label"></label>
+                    <textarea asp-for="AdminComplete.AdminNotes" class="form-control" data-history-field="AdminComplete.AdminNotes"></textarea>
+                </div>
+            </div>
+        </div>
+    }
+    }
+
+    <div class="formActions pageFooterActions workflowActionBar">
+        <div class="workflowActionButtons">
+            <input type="hidden" id="confirmation" name="confirmation" value="confirm" />
+            @if (showNextWorkflowButton)
+            {
+                <a asp-action="Edit"
+                   asp-route-id="@Model.ID"
+                   asp-route-workflowStatus="@nextWorkflowStatus"
+                   class="mu-btn mu-btn-secondary workflowActionButton">
+                    @nextWorkflowLabel
+                </a>
+            }
+            @if (showWorkflowSubmitButton)
+            {
+                <button type="submit"
+                        name="Status"
+                        id="btnConfirm"
+                        value="@activeStage"
+                        class="mu-btn mu-btn-accent is-selected workflowActionButton">
+                    @mainSaveLabel
+                </button>
+            }
+            <button type="button"
+                    id="btnFill"
+                    class="mu-btn mu-btn-secondary is-selected workflowActionButton"
+                    onclick="FillCreate()">
+                Fill Fields
+            </button>
+        </div>
+        <a asp-action="Details" asp-route-id="@Model.ID" class="mu-btn mu-btn-secondary">View Details</a>
+        <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Sessions</a>
+    </div>
+</form>
+
+<div class="modal fade" id="mymodal" tabindex="-1" aria-labelledby="sessionEditConfirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+        <div class="modal-content mu-modal">
+            <div class="mu-modal-accent"></div>
+            <div class="modal-header mu-modal-header">
+                <div>
+                    <span class="mu-modal-badge">Review Session</span>
+                    <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="sessionEditConfirmTitle">Confirm session details</h2>
+                    <p class="mu-modal-copy">Please review the session details before saving it.</p>
+                </div>
+                <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body mu-modal-body">
+                <div class="detailFields clientConfirmGrid">
+                </div>
+            </div>
+            <div class="modal-footer mu-modal-footer">
+                <input id="btnsubmit" type="submit" form="pageForm" value="Confirm" class="mu-btn mu-btn-primary" />
+                <button type="button" class="mu-btn mu-btn-ghost" data-bs-dismiss="modal">Back to Form</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+    
+        function FillCreate() {
+
+            if (@((int)Model.SessionType) == @((int)SessionType.SemiPrivate)){
+
+                document.getElementById("Client2SessionNotes_Goals").value = "Final package session. Review progress."
+                document.getElementById("Client2SessionNotes_GeneralComments").value = "";
+                document.getElementById("Client2SessionNotes_SubjectiveReports").value = "Knee pain free for 2 weeks.";
+                document.getElementById("Client2SessionNotes_ObjectiveFindings").value = "Full depth squat with good mechanics. Single leg stable.";
+                document.getElementById("Client2SessionNotes_Plan").value = "Ready to progress to independent training with check-ins.";
+
+                document.getElementById("Client2Accessories_HeadPad").value = 4;
+                document.getElementById("Client2Accessories_StrapsOrHandles").value = 1;
+
+                document.getElementById("Client2Accessories_GearBar").value = 2;
+                document.getElementById("Client2Accessories_StopperSettings").value = 5;
+            }
+
+            document.getElementById("SessionNotes_Goals").value = "Posture and endurance review."
+            document.getElementById("SessionNotes_GeneralComments").value = "Wants to continue. Booking next package.";
+            document.getElementById("SessionNotes_SubjectiveReports").value = "No upper back pain this week.";
+            document.getElementById("SessionNotes_ObjectiveFindings").value = "Posture significantly improved. Head neutral.";
+            document.getElementById("SessionNotes_Plan").value = "Maintain current program. Add variety.";
+
+            document.getElementById("Accessories_HeadPad").value = 2;
+            document.getElementById("Accessories_StrapsOrHandles").value = 1;
+
+            document.getElementById("Accessories_GearBar").value = 1;
+            document.getElementById("Accessories_StopperSettings").value = 2;
+
+            document.getElementById("SessionsPerWeekRecommended").value = 2;
+
+        }
+
+        (function () {
+            const editForm = document.querySelector("form.editShell");
+            const sessionTypeField = document.getElementById("SessionType");
+            const semiPrivateValue = "@((int)SessionType.SemiPrivate)";
+            const semiPrivateSections = document.querySelectorAll(".semiPrivateOnly");
+            const semiPrivateFields = document.querySelectorAll(".semiPrivateOnly input, .semiPrivateOnly select, .semiPrivateOnly textarea");
+            const historyPreviousButton = document.getElementById("historyPreviousButton");
+            const historyNextButton = document.getElementById("historyNextButton");
+            const historyStatusLabel = document.getElementById("historyStatusLabel");
+            const historyCountLabel = document.getElementById("historyCountLabel");
+            const historyViewerContainers = Array.from(document.querySelectorAll("[data-history-viewer-container]"));
+            const historyActionsContainer = document.getElementById("historyActionsContainer");
+            const saveButton = document.querySelector("button[type='submit'][name='Status']");
+            const addActionSessionClientIdField = document.getElementById("addActionSessionClientId");
+            const editableControls = editForm
+                ? Array.from(editForm.querySelectorAll("input:not([type='hidden']), select, textarea, button"))
+                    .filter(control =>
+                        control !== historyPreviousButton
+                        && control !== historyNextButton
+                        && !control.matches("button[data-bs-toggle='collapse']"))
+                : [];
+            const workflowActionLinks = editForm
+                ? Array.from(editForm.querySelectorAll(".workflowActionButtons a.workflowActionButton"))
+                : [];
+            const currentSessionId = @Model.ID;
+            const currentSessionDate = "@Model.SessionDate.ToString("yyyy-MM-dd")";
+            const primaryClientId = @(Model.ClientID?.ToString() ?? "null");
+            const secondaryClientId = @(Model.Client2ID?.ToString() ?? "null");
+            const isSemiPrivateSession = @(isSemiPrivate ? "true" : "false");
+            const usesLoggedHistoryScope = @(currentStatus == SessionStatus.Logged ? "true" : "false");
+            const actionHistoryUsesCompactLayout = @(activeStage == SessionStatus.Logged ? "true" : "false");
+            const currentStateLabel = "Current session values";
+            const emptyActionsMessage = "No Excercises have been added yet.";
+            const historyFields = Array.from(document.querySelectorAll("[data-history-field]"));
+            const originalState = new Map();
+            const originalControlState = new Map();
+            const originalActionLinkState = new Map();
+            const historyCache = new Map();
+            let originalActionsMarkup = historyActionsContainer ? historyActionsContainer.innerHTML : "";
+            const primaryHistoryFieldNames = [
+                "SessionNotes.Goals",
+                "SessionNotes.GeneralComments",
+                "SessionNotes.SubjectiveReports",
+                "SessionNotes.ObjectiveFindings",
+                "SessionNotes.Plan",
+                "SessionsPerWeekRecommended",
+                "NextSteps.NextAppointmentBooked",
+                "NextSteps.CommunicatedProgress",
+                "NextSteps.ReadyToProgress",
+                "NextSteps.CourseCorrectionNeeded",
+                "NextSteps.TeamConsult",
+                "NextSteps.ReferredExternally",
+                "NextSteps.ReferredTo",
+                "AdminComplete.IsPaid",
+                "AdminComplete.AdminNotes",
+                "AdminComplete.AdminInitials",
+                "Accessories.HeadPad",
+                "Accessories.StrapsOrHandles",
+                "Accessories.GearBar",
+                "Accessories.StopperSettings",
+                "Accessories.RubberPads",
+                "Accessories.HeadRest",
+                "Accessories.Towel",
+                "Accessories.PosturePillow",
+                "PhysioInfo.PhysioAssessment",
+                "PhysioInfo.InsuranceCompany",
+                "PhysioInfo.CoverageAmountPerYear",
+                "PhysioInfo.AmountUsed",
+                "PhysioInfo.CoverageResetsDate",
+                "PhysioInfo.PhysiotherapistName",
+                "PhysioInfo.CoverageShared",
+                "PhysioInfo.CommunicatedWithPhysio"
+            ];
+            const secondaryHistoryFieldNames = [
+                "Client2SessionNotes.Goals",
+                "Client2SessionsPerWeekRecommended",
+                "Client2SessionNotes.GeneralComments",
+                "Client2SessionNotes.SubjectiveReports",
+                "Client2SessionNotes.ObjectiveFindings",
+                "Client2SessionNotes.Plan",
+                "Client2Accessories.HeadPad",
+                "Client2Accessories.StrapsOrHandles",
+                "Client2Accessories.GearBar",
+                "Client2Accessories.StopperSettings",
+                "Client2Accessories.RubberPads",
+                "Client2Accessories.HeadRest",
+                "Client2Accessories.Towel",
+                "Client2Accessories.PosturePillow"
+            ];
+            const loggedPrimaryHistoryFieldNames = [
+                "AdminComplete.IsPaid",
+                "AdminComplete.AdminNotes",
+                "AdminComplete.AdminInitials",
+                "PhysioInfo.PhysioAssessment",
+                "PhysioInfo.InsuranceCompany",
+                "PhysioInfo.CoverageAmountPerYear",
+                "PhysioInfo.AmountUsed",
+                "PhysioInfo.CoverageResetsDate",
+                "PhysioInfo.PhysiotherapistName",
+                "PhysioInfo.CoverageShared",
+                "PhysioInfo.CommunicatedWithPhysio"
+            ];
+            const loggedSecondaryHistoryFieldNames = [];
+            let currentOffset = -1;
+            let totalHistoryCount = 0;
+            let primaryHistoryCount = 0;
+            let secondaryHistoryCount = 0;
+            let historySummaryLoaded = false;
+            let isDirty = false;
+            let suppressDirtyTracking = false;
+            let allowNavigationWithoutWarning = false;
+            const completionAccordion = document.getElementById("sessionEditCompletionAccordion");
+            const defaultHistoryAutoOpenPaneIds = [
+                "collapseEditSessionNotes",
+                "collapseEditAccessories",
+                "collapseEditNextSteps",
+                "collapseEditPhysioInfo",
+                "collapseEditAdminComplete"
+            ];
+            const loggedHistoryAutoOpenPaneIds = [
+                "collapseEditPhysioInfo",
+                "collapseEditAdminComplete"
+            ];
+            const historyAutoOpenPaneIds = usesLoggedHistoryScope
+                ? loggedHistoryAutoOpenPaneIds
+                : defaultHistoryAutoOpenPaneIds;
+
+            function setHistoryViewerVisibility(isVisible) {
+                historyViewerContainers.forEach(container => {
+                    container.hidden = !isVisible;
+                });
+            }
+
+            function getPrimaryHistoryFieldNames() {
+                return usesLoggedHistoryScope
+                    ? loggedPrimaryHistoryFieldNames
+                    : primaryHistoryFieldNames;
+            }
+
+            function getSecondaryHistoryFieldNames() {
+                return usesLoggedHistoryScope
+                    ? loggedSecondaryHistoryFieldNames
+                    : secondaryHistoryFieldNames;
+            }
+
+            function isTrackedEditableControl(control) {
+                if (!control || !editForm || !editForm.contains(control)) {
+                    return false;
+                }
+
+                if (!(control instanceof HTMLInputElement
+                    || control instanceof HTMLSelectElement
+                    || control instanceof HTMLTextAreaElement)) {
+                    return false;
+                }
+
+                return control.type !== "hidden"
+                    && !control.disabled
+                    && !control.readOnly;
+            }
+
+            function markDirty() {
+                if (!allowNavigationWithoutWarning) {
+                    isDirty = true;
+                }
+            }
+
+            function allowIntentionalNavigation() {
+                allowNavigationWithoutWarning = true;
+
+                window.setTimeout(function () {
+                    allowNavigationWithoutWarning = false;
+                }, 1000);
+            }
+
+            function runProgrammaticUpdate(action) {
+                suppressDirtyTracking = true;
+
+                try {
+                    action();
+                } finally {
+                    suppressDirtyTracking = false;
+                }
+            }
+
+            function syncSections() {
+                const isSemiPrivate = sessionTypeField && sessionTypeField.value === semiPrivateValue;
+
+                semiPrivateSections.forEach(section => section.classList.toggle("d-none", !isSemiPrivate));
+                semiPrivateFields.forEach(field => field.disabled = !isSemiPrivate);
+            }
+
+            function snapshotElement(element) {
+                if (element.type === "checkbox" || element.type === "radio") {
+                    return { checked: element.checked };
+                }
+
+                if ("value" in element) {
+                    return { value: element.value };
+                }
+
+                return { text: element.textContent };
+            }
+
+            function restoreElement(element, state) {
+                if (!state) {
+                    return;
+                }
+
+                if (element.type === "checkbox" || element.type === "radio") {
+                    element.checked = !!state.checked;
+                    return;
+                }
+
+                if ("value" in element && Object.prototype.hasOwnProperty.call(state, "value")) {
+                    element.value = state.value;
+                    return;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(state, "text")) {
+                    element.textContent = state.text;
+                }
+            }
+
+            function snapshotCurrentActionsState() {
+                if (!historyActionsContainer) {
+                    return;
+                }
+
+                originalActionsMarkup = historyActionsContainer.innerHTML;
+            }
+
+            function restoreCurrentActionsState() {
+                if (!historyActionsContainer) {
+                    return;
+                }
+
+                historyActionsContainer.innerHTML = originalActionsMarkup;
+            }
+
+            function escapeHtml(value) {
+                return String(value ?? "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function getHistoryActions(data) {
+                return data && Array.isArray(data.actions) ? data.actions : [];
+            }
+
+            function renderCompactHistoryActionCard(action) {
+                const propNames = Array.isArray(action?.propNames)
+                    ? action.propNames.filter(name => typeof name === "string" && name.trim() !== "")
+                    : [];
+
+                return `
+                    <div class="actionCardCompact">
+                        <h4 class="actionCardTitle">${escapeHtml(action?.exerciseName || "Excercise")}</h4>
+                        ${action?.apparatusName ? `<div class="actionMetaRow"><strong>Apparatus:</strong> ${escapeHtml(action.apparatusName)}</div>` : ""}
+                        ${action?.springs ? `<div class="actionMetaRow"><strong>Springs:</strong> ${escapeHtml(action.springs)}</div>` : ""}
+                        ${propNames.length ? `<div class="actionMetaRow"><strong>Props:</strong> ${escapeHtml(propNames.join(", "))}</div>` : ""}
+                        ${action?.notes ? `<div class="actionNotesCompact"><strong>Notes:</strong> ${escapeHtml(action.notes)}</div>` : ""}
+                    </div>`;
+            }
+
+            function renderDetailHistoryActionCard(action) {
+                const propNames = Array.isArray(action?.propNames)
+                    ? action.propNames.filter(name => typeof name === "string" && name.trim() !== "")
+                    : [];
+
+                return `
+                    <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; background-color: #f9f9f9;">
+                        <h4 style="margin-top: 0; margin-bottom: 10px;">${escapeHtml(action?.exerciseName || "Excercise")}</h4>
+                        ${action?.apparatusName ? `<div style="margin-bottom: 8px;"><strong>Apparatus:</strong> ${escapeHtml(action.apparatusName)}</div>` : ""}
+                        ${action?.springs ? `<div style="margin-bottom: 8px;"><strong>Springs:</strong> ${escapeHtml(action.springs)}</div>` : ""}
+                        ${propNames.length ? `<div style="margin-bottom: 8px;"><strong>Props:</strong> ${escapeHtml(propNames.join(", "))}</div>` : ""}
+                        ${action?.notes ? `<div style="margin-bottom: 10px; background-color: white; padding: 8px; border-radius: 3px; border-left: 3px solid #007bff;"><strong>Notes:</strong> ${escapeHtml(action.notes)}</div>` : ""}
+                    </div>`;
+            }
+
+            function renderHistoryActionsList(actions, includeBottomMargin) {
+                if (!actions.length) {
+                    return `<p class="detailEmpty">${emptyActionsMessage}</p>`;
+                }
+
+                if (actionHistoryUsesCompactLayout) {
+                    const marginStyle = includeBottomMargin ? ` style="margin-bottom: 16px;"` : "";
+                    return `<div class="actionGridCompact"${marginStyle}>${actions.map(renderCompactHistoryActionCard).join("")}</div>`;
+                }
+
+                const marginStyle = includeBottomMargin ? " margin-bottom: 16px;" : "";
+                return `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;${marginStyle}">${actions.map(renderDetailHistoryActionCard).join("")}</div>`;
+            }
+
+            function renderHistoryParticipantActions(label, actions) {
+                if (actionHistoryUsesCompactLayout) {
+                    return `
+                        <div class="actionsParticipantHeader">
+                            <h3 class="sectionCardTitle mb-0" style="font-size: 1.05rem;">${escapeHtml(label)}</h3>
+                        </div>
+                        ${renderHistoryActionsList(actions, true)}`;
+                }
+
+                return `
+                    <h3 class="sectionCardTitle" style="font-size: 1.05rem; margin-bottom: 12px;">${escapeHtml(label)}</h3>
+                    ${renderHistoryActionsList(actions, true)}`;
+            }
+
+            function renderHistoryActions(primaryHistory, secondaryHistory) {
+                if (!historyActionsContainer) {
+                    return;
+                }
+
+                const primaryActions = getHistoryActions(primaryHistory);
+                if (isSemiPrivateSession) {
+                    const secondaryActions = getHistoryActions(secondaryHistory);
+                    historyActionsContainer.innerHTML = [
+                        renderHistoryParticipantActions("Client 1", primaryActions),
+                        renderHistoryParticipantActions("Client 2", secondaryActions)
+                    ].join("");
+                    return;
+                }
+
+                historyActionsContainer.innerHTML = renderHistoryActionsList(primaryActions, false);
+            }
+
+            function formatDisplayValue(value, format) {
+                if (format === "yesno") {
+                    return value ? "Yes" : "No";
+                }
+
+                return value === null || value === undefined || value === "" ? "-" : String(value);
+            }
+
+            function applyValueToField(fieldName, value) {
+                document.querySelectorAll(`[data-history-field="${fieldName}"]`).forEach(element => {
+                    if (element.type === "checkbox") {
+                        element.checked = !!value;
+                        return;
+                    }
+
+                    if (element.type === "radio") {
+                        element.checked = value !== null && value !== undefined && String(value) === element.value;
+                        return;
+                    }
+
+                    if ("value" in element) {
+                        element.value = value === null || value === undefined ? "" : String(value);
+                        return;
+                    }
+
+                    element.textContent = formatDisplayValue(value, element.dataset.historyFormat);
+                });
+            }
+
+            function clearHistoryFields(fieldNames) {
+                fieldNames.forEach(fieldName => applyValueToField(fieldName, null));
+            }
+
+            function clearPrimaryHistory() {
+                clearHistoryFields(getPrimaryHistoryFieldNames());
+            }
+
+            function clearSecondaryHistory() {
+                clearHistoryFields(getSecondaryHistoryFieldNames());
+            }
+
+            function getHistoryCount(history) {
+                return history && history.totalCount ? history.totalCount : 0;
+            }
+
+            function setHistorySummary(primaryHistory, secondaryHistory) {
+                primaryHistoryCount = getHistoryCount(primaryHistory);
+                secondaryHistoryCount = getHistoryCount(secondaryHistory);
+                totalHistoryCount = Math.max(primaryHistoryCount, secondaryHistoryCount);
+            }
+
+            function updateHistoryMetaUi() {
+                if (!historyCountLabel) {
+                    return;
+                }
+
+                historyCountLabel.textContent = `Previous Sessions: ${historySummaryLoaded ? totalHistoryCount : "-"}`;
+            }
+
+            function snapshotLiveCurrentFieldState() {
+                historyFields.forEach((element, index) => {
+                    const snapshotId = element.dataset.historySnapshotId || String(index);
+                    element.dataset.historySnapshotId = snapshotId;
+                    originalState.set(snapshotId, snapshotElement(element));
+                });
+            }
+
+            function snapshotCurrentState() {
+                snapshotCurrentActionsState();
+                snapshotLiveCurrentFieldState();
+
+                editableControls.forEach((control, index) => {
+                    control.dataset.historyControlId = String(index);
+                    originalControlState.set(String(index), {
+                        disabled: !!control.disabled,
+                        readOnly: !!control.readOnly
+                    });
+                });
+
+                workflowActionLinks.forEach((link, index) => {
+                    link.dataset.historyActionId = String(index);
+                    originalActionLinkState.set(String(index), {
+                        tabIndex: link.hasAttribute("tabindex") ? link.getAttribute("tabindex") : null,
+                        ariaDisabled: link.getAttribute("aria-disabled")
+                    });
+                });
+            }
+
+            function restoreCurrentState() {
+                runProgrammaticUpdate(function () {
+                    restoreCurrentActionsState();
+                    historyFields.forEach(element => restoreElement(element, originalState.get(element.dataset.historySnapshotId)));
+                    editableControls.forEach(control => {
+                        const state = originalControlState.get(control.dataset.historyControlId);
+                        if (!state) {
+                            return;
+                        }
+
+                        control.disabled = state.disabled;
+                        control.readOnly = state.readOnly;
+                    });
+                    workflowActionLinks.forEach(link => {
+                        const state = originalActionLinkState.get(link.dataset.historyActionId);
+                        link.classList.remove("history-disabled-action");
+
+                        if (!state) {
+                            return;
+                        }
+
+                        if (state.tabIndex === null) {
+                            link.removeAttribute("tabindex");
+                        } else {
+                            link.setAttribute("tabindex", state.tabIndex);
+                        }
+
+                        if (state.ariaDisabled === null) {
+                            link.removeAttribute("aria-disabled");
+                        } else {
+                            link.setAttribute("aria-disabled", state.ariaDisabled);
+                        }
+                    });
+                    if (editForm) {
+                        editForm.classList.remove("history-reference-mode");
+                    }
+                    syncSections();
+                });
+            }
+
+            function setBrowsingState(isBrowsingHistory) {
+                if (saveButton) {
+                    saveButton.disabled = isBrowsingHistory;
+                    saveButton.title = isBrowsingHistory ? "Return to current session values before saving." : "";
+                }
+
+                editableControls.forEach(control => {
+                    const state = originalControlState.get(control.dataset.historyControlId);
+                    if (!state) {
+                        return;
+                    }
+
+                    control.disabled = isBrowsingHistory ? true : state.disabled;
+                    control.readOnly = isBrowsingHistory ? true : state.readOnly;
+                });
+
+                workflowActionLinks.forEach(link => {
+                    const state = originalActionLinkState.get(link.dataset.historyActionId);
+                    if (isBrowsingHistory) {
+                        link.classList.add("history-disabled-action");
+                        link.setAttribute("aria-disabled", "true");
+                        link.setAttribute("tabindex", "-1");
+                        return;
+                    }
+
+                    link.classList.remove("history-disabled-action");
+                    if (!state) {
+                        return;
+                    }
+
+                    if (state.ariaDisabled === null) {
+                        link.removeAttribute("aria-disabled");
+                    } else {
+                        link.setAttribute("aria-disabled", state.ariaDisabled);
+                    }
+
+                    if (state.tabIndex === null) {
+                        link.removeAttribute("tabindex");
+                    } else {
+                        link.setAttribute("tabindex", state.tabIndex);
+                    }
+                });
+
+                if (editForm) {
+                    editForm.classList.toggle("history-reference-mode", isBrowsingHistory);
+                }
+            }
+
+            function openCompletionAccordionPane(paneId) {
+                if (!completionAccordion) {
+                    return;
+                }
+
+                const pane = document.getElementById(paneId);
+                if (!pane || pane.classList.contains("show")) {
+                    return;
+                }
+
+                if (window.bootstrap && window.bootstrap.Collapse) {
+                    window.bootstrap.Collapse.getOrCreateInstance(pane, { toggle: false }).show();
+                    return;
+                }
+
+                pane.classList.add("show");
+                const trigger = document.querySelector(`[data-bs-target="#${paneId}"]`);
+                if (trigger) {
+                    trigger.classList.remove("collapsed");
+                    trigger.setAttribute("aria-expanded", "true");
+                }
+            }
+
+            function openRelevantHistoryPane() {
+                const targetPaneId = historyAutoOpenPaneIds.find(function (paneId) {
+                    return !!document.getElementById(paneId);
+                });
+
+                if (!targetPaneId) {
+                    return;
+                }
+
+                openCompletionAccordionPane(targetPaneId);
+            }
+
+            function updateHistoryUi() {
+                const hasClient = !!primaryClientId || (isSemiPrivateSession && !!secondaryClientId);
+                const hasHistory = totalHistoryCount > 0;
+                setHistoryViewerVisibility(historySummaryLoaded && hasClient && hasHistory);
+
+                if (!historyPreviousButton || !historyNextButton || !historyStatusLabel) {
+                    return;
+                }
+
+                updateHistoryMetaUi();
+
+                historyPreviousButton.disabled = !historySummaryLoaded
+                    || !hasClient
+                    || !hasHistory
+                    || currentOffset >= totalHistoryCount - 1;
+                historyNextButton.disabled = currentOffset < 0;
+
+                if (!hasClient || currentOffset < 0) {
+                    historyStatusLabel.textContent = historySummaryLoaded && !hasHistory
+                        ? "No previous sessions available"
+                        : currentStateLabel;
+                    setBrowsingState(false);
+                    return;
+                }
+
+                const primaryHistory = historyCache.get(`primary:${currentOffset}`);
+                const secondaryHistory = historyCache.get(`secondary:${currentOffset}`);
+                const labelParts = [`Viewing previous session ${currentOffset + 1} of ${totalHistoryCount}`];
+
+                if (isSemiPrivateSession && secondaryClientId) {
+                    if (primaryHistory && primaryHistory.sessionDate) {
+                        labelParts.push(`Client 1 ${primaryHistory.sessionDate}`);
+                    } else {
+                        labelParts.push("Client 1 no history");
+                    }
+                } else if (primaryHistory && primaryHistory.sessionDate) {
+                    labelParts.push(primaryHistory.sessionDate);
+                }
+
+                if (isSemiPrivateSession && secondaryClientId) {
+                    if (secondaryHistory && secondaryHistory.sessionDate) {
+                        labelParts.push(`Client 2 ${secondaryHistory.sessionDate}`);
+                    } else {
+                        labelParts.push("Client 2 no history");
+                    }
+                }
+
+                historyStatusLabel.textContent = labelParts.join(" | ");
+                setBrowsingState(true);
+                openRelevantHistoryPane();
+            }
+
+            async function fetchHistory(clientId, offset, cacheKey) {
+                if (!clientId) {
+                    return null;
+                }
+
+                if (historyCache.has(cacheKey)) {
+                    return historyCache.get(cacheKey);
+                }
+
+                const url = `@Url.Action("ClientSessionHistory", "Session")?clientId=${encodeURIComponent(clientId)}&offset=${encodeURIComponent(offset)}&currentSessionId=${encodeURIComponent(currentSessionId)}&referenceDate=${encodeURIComponent(currentSessionDate)}`;
+                const response = await fetch(url, {
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to load history.");
+                }
+
+                const data = await response.json();
+                historyCache.set(cacheKey, data);
+                return data;
+            }
+
+            function applyPrimaryHistory(data) {
+                if (usesLoggedHistoryScope) {
+                    applyValueToField("AdminComplete.IsPaid", data ? data.isPaid : null);
+                    applyValueToField("AdminComplete.AdminNotes", data ? data.adminNotes : null);
+                    applyValueToField("AdminComplete.AdminInitials", data ? data.adminInitials : null);
+                    applyValueToField("PhysioInfo.PhysioAssessment", data ? data.physioAssessment : null);
+                    applyValueToField("PhysioInfo.InsuranceCompany", data ? data.insuranceCompany : null);
+                    applyValueToField("PhysioInfo.CoverageAmountPerYear", data ? data.coverageAmountPerYear : null);
+                    applyValueToField("PhysioInfo.AmountUsed", data ? data.amountUsed : null);
+                    applyValueToField("PhysioInfo.CoverageResetsDate", data ? data.coverageResetsDate : null);
+                    applyValueToField("PhysioInfo.PhysiotherapistName", data ? data.physiotherapistName : null);
+                    applyValueToField("PhysioInfo.CoverageShared", data ? data.coverageShared : null);
+                    applyValueToField("PhysioInfo.CommunicatedWithPhysio", data ? data.communicatedWithPhysio : null);
+                    return;
+                }
+
+                applyValueToField("SessionNotes.Goals", data ? data.goals : null);
+                applyValueToField("SessionsPerWeekRecommended", data ? data.sessionsPerWeekRecommended : null);
+                applyValueToField("SessionNotes.GeneralComments", data ? data.generalComments : null);
+                applyValueToField("SessionNotes.SubjectiveReports", data ? data.subjectiveReports : null);
+                applyValueToField("SessionNotes.ObjectiveFindings", data ? data.objectiveFindings : null);
+                applyValueToField("SessionNotes.Plan", data ? data.plan : null);
+                applyValueToField("Accessories.HeadPad", data ? data.headPad : null);
+                applyValueToField("Accessories.StrapsOrHandles", data ? data.strapsOrHandles : null);
+                applyValueToField("Accessories.GearBar", data ? data.gearBar : null);
+                applyValueToField("Accessories.StopperSettings", data ? data.stopperSettings : null);
+                applyValueToField("Accessories.RubberPads", data ? data.rubberPads : null);
+                applyValueToField("Accessories.HeadRest", data ? data.headRest : null);
+                applyValueToField("Accessories.Towel", data ? data.towel : null);
+                applyValueToField("Accessories.PosturePillow", data ? data.posturePillow : null);
+                applyValueToField("NextSteps.NextAppointmentBooked", data ? data.nextAppointmentBooked : null);
+                applyValueToField("NextSteps.CommunicatedProgress", data ? data.communicatedProgress : null);
+                applyValueToField("NextSteps.ReadyToProgress", data ? data.readyToProgress : null);
+                applyValueToField("NextSteps.CourseCorrectionNeeded", data ? data.courseCorrectionNeeded : null);
+                applyValueToField("NextSteps.TeamConsult", data ? data.teamConsult : null);
+                applyValueToField("NextSteps.ReferredExternally", data ? data.referredExternally : null);
+                applyValueToField("NextSteps.ReferredTo", data ? data.referredTo : null);
+                applyValueToField("AdminComplete.IsPaid", data ? data.isPaid : null);
+                applyValueToField("AdminComplete.AdminNotes", data ? data.adminNotes : null);
+                applyValueToField("AdminComplete.AdminInitials", data ? data.adminInitials : null);
+                applyValueToField("PhysioInfo.PhysioAssessment", data ? data.physioAssessment : null);
+                applyValueToField("PhysioInfo.InsuranceCompany", data ? data.insuranceCompany : null);
+                applyValueToField("PhysioInfo.CoverageAmountPerYear", data ? data.coverageAmountPerYear : null);
+                applyValueToField("PhysioInfo.AmountUsed", data ? data.amountUsed : null);
+                applyValueToField("PhysioInfo.CoverageResetsDate", data ? data.coverageResetsDate : null);
+                applyValueToField("PhysioInfo.PhysiotherapistName", data ? data.physiotherapistName : null);
+                applyValueToField("PhysioInfo.CoverageShared", data ? data.coverageShared : null);
+                applyValueToField("PhysioInfo.CommunicatedWithPhysio", data ? data.communicatedWithPhysio : null);
+            }
+
+            function applySecondaryHistory(data) {
+                if (usesLoggedHistoryScope) {
+                    return;
+                }
+
+                applyValueToField("Client2SessionNotes.Goals", data ? data.goals : null);
+                applyValueToField("Client2SessionsPerWeekRecommended", data ? data.sessionsPerWeekRecommended : null);
+                applyValueToField("Client2SessionNotes.GeneralComments", data ? data.generalComments : null);
+                applyValueToField("Client2SessionNotes.SubjectiveReports", data ? data.subjectiveReports : null);
+                applyValueToField("Client2SessionNotes.ObjectiveFindings", data ? data.objectiveFindings : null);
+                applyValueToField("Client2SessionNotes.Plan", data ? data.plan : null);
+                applyValueToField("Client2Accessories.HeadPad", data ? data.headPad : null);
+                applyValueToField("Client2Accessories.StrapsOrHandles", data ? data.strapsOrHandles : null);
+                applyValueToField("Client2Accessories.GearBar", data ? data.gearBar : null);
+                applyValueToField("Client2Accessories.StopperSettings", data ? data.stopperSettings : null);
+                applyValueToField("Client2Accessories.RubberPads", data ? data.rubberPads : null);
+                applyValueToField("Client2Accessories.HeadRest", data ? data.headRest : null);
+                applyValueToField("Client2Accessories.Towel", data ? data.towel : null);
+                applyValueToField("Client2Accessories.PosturePillow", data ? data.posturePillow : null);
+            }
+
+            async function initializeHistorySummary() {
+                const hasClient = !!primaryClientId || (isSemiPrivateSession && !!secondaryClientId);
+
+                if (!hasClient) {
+                    historySummaryLoaded = true;
+                    updateHistoryUi();
+                    return;
+                }
+
+                try {
+                    const primaryHistoryTask = primaryClientId
+                        ? fetchHistory(primaryClientId, 0, "primary:0")
+                        : Promise.resolve(null);
+                    const secondaryHistoryTask = isSemiPrivateSession && secondaryClientId
+                        ? fetchHistory(secondaryClientId, 0, "secondary:0")
+                        : Promise.resolve(null);
+                    const [primaryHistory, secondaryHistory] = await Promise.all([primaryHistoryTask, secondaryHistoryTask]);
+
+                    setHistorySummary(primaryHistory, secondaryHistory);
+                } catch (error) {
+                    setHistorySummary(null, null);
+                }
+
+                historySummaryLoaded = true;
+                updateHistoryUi();
+            }
+
+            async function showHistory(offset) {
+                if (!primaryClientId && !(isSemiPrivateSession && secondaryClientId)) {
+                    setHistorySummary(null, null);
+                    updateHistoryUi();
+                    return;
+                }
+
+                if (offset < 0) {
+                    currentOffset = -1;
+                    restoreCurrentState();
+                    updateHistoryUi();
+                    return;
+                }
+
+                try {
+                    if (currentOffset < 0) {
+                        snapshotCurrentActionsState();
+                        snapshotLiveCurrentFieldState();
+                    }
+
+                    const primaryHistoryTask = primaryClientId
+                        ? fetchHistory(primaryClientId, offset, `primary:${offset}`)
+                        : Promise.resolve(null);
+                    const secondaryHistoryTask = isSemiPrivateSession && secondaryClientId
+                        ? fetchHistory(secondaryClientId, offset, `secondary:${offset}`)
+                        : Promise.resolve(null);
+                    const [primaryHistory, secondaryHistory] = await Promise.all([primaryHistoryTask, secondaryHistoryTask]);
+                    const hasPrimaryHistory = !!(primaryHistory && primaryHistory.found !== false);
+                    const hasSecondaryHistory = !!(secondaryHistory && secondaryHistory.found !== false);
+
+                    setHistorySummary(
+                        historyCache.get("primary:0"),
+                        historyCache.get("secondary:0"));
+
+                    if (!hasPrimaryHistory && !hasSecondaryHistory) {
+                        currentOffset = -1;
+                        restoreCurrentState();
+                        updateHistoryUi();
+                        return;
+                    }
+
+                    restoreCurrentState();
+                    runProgrammaticUpdate(function () {
+                        if (hasPrimaryHistory) {
+                            applyPrimaryHistory(primaryHistory);
+                        } else {
+                            clearPrimaryHistory();
+                        }
+
+                        if (isSemiPrivateSession && secondaryClientId) {
+                            if (hasSecondaryHistory) {
+                                applySecondaryHistory(secondaryHistory);
+                            } else {
+                                clearSecondaryHistory();
+                            }
+                        }
+
+                        if (!usesLoggedHistoryScope) {
+                            renderHistoryActions(primaryHistory, secondaryHistory);
+                        }
+                        syncSections();
+                    });
+
+                    currentOffset = offset;
+                    updateHistoryUi();
+                } catch (error) {
+                    currentOffset = -1;
+                    restoreCurrentState();
+                    updateHistoryUi();
+                }
+            }
+
+            if (sessionTypeField) {
+                sessionTypeField.addEventListener("change", syncSections);
+                syncSections();
+            }
+
+            if (editForm && addActionSessionClientIdField) {
+                const onUserEdit = function (event) {
+                    if (suppressDirtyTracking || !event.isTrusted || !isTrackedEditableControl(event.target)) {
+                        return;
+                    }
+
+                    markDirty();
+                };
+
+                editForm.addEventListener("input", onUserEdit);
+                editForm.addEventListener("change", onUserEdit);
+                editForm.addEventListener("submit", function (event) {
+                    allowIntentionalNavigation();
+                    addActionSessionClientIdField.value = event.submitter?.dataset.addActionSessionClientId ?? "";
+                });
+            }
+
+            window.addEventListener("beforeunload", function (event) {
+                if (!isDirty || allowNavigationWithoutWarning) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.returnValue = "";
+            });
+
+            snapshotCurrentState();
+            updateHistoryUi();
+            initializeHistorySummary();
+
+            if (historyPreviousButton) {
+                historyPreviousButton.addEventListener("click", function () {
+                    const nextOffset = currentOffset < 0 ? 0 : currentOffset + 1;
+                    showHistory(nextOffset);
+                });
+            }
+
+            if (historyNextButton) {
+                historyNextButton.addEventListener("click", function () {
+                    showHistory(currentOffset - 1);
+                });
+            }
+
+
+            const form = document.getElementById("pageForm");
+            const confirmButton = document.getElementById("btnConfirm");
+            const submitButton = document.getElementById("btnsubmit");
+            const confirmationField = document.getElementById("confirmation");
+            const modalElement = document.getElementById("mymodal");
+            const modal = new bootstrap.Modal(modalElement);
+            const jqueryForm = window.jQuery ? window.jQuery(form) : null;
+
+            function setModalValue(id, value) {
+                const target = document.getElementById(id);
+                const text = typeof value === "string" ? value.trim() : value;
+                target.textContent = text ? text : "Not provided";
+            }
+
+            function setModalHidden(id, value) {
+                const target = document.getElementById(id);
+                target.hidden = value;
+            }
+
+
+            function populateModal() {
+
+                /*
+                if(activeStage == SessionStatus.Logged){
+
+                    setModalValue("ModalSessionNotes", document.getElementById("SessionNotes_Goals").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("SessionNotes_GeneralComments").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("SessionNotes_SubjectiveReports").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("SessionNotes_ObjectiveFindings").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("SessionNotes_Plan").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("Accessories_HeadPad").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("Accessories_StrapsOrHandles").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("Accessories_GearBar").Value
+                    setModalValue("ModalSessionNotes", document.getElementById("Accessories_StopperSettings").Value
+
+                    SessionsPerWeek = document.getElementById("SessionsPerWeekRecommended")
+
+                    if (((int)Model.SessionType) == ((int)SessionType.SemiPrivate)){
+
+                            Client2SessionNotes_Goals =             document.getElementById("Client2SessionNotes_Goals")
+                            Client2SessionNotes_GeneralComments =   document.getElementById("Client2SessionNotes_GeneralComments")
+                            Client2SessionNotes_SubjectiveNotes =   document.getElementById("Client2SessionNotes_SubjectiveReports")
+                            Client2SessionNotes_Plan =              document.getElementById("Client2SessionNotes_Plan")
+                            Client2SessionNotes_ObjectiveFindings = document.getElementById("Client2SessionNotes_ObjectiveFindings")
+                            Client2Accessories_HeadPad =            document.getElementById("Client2Accessories_HeadPad")
+                            Client2Accessories_StrapsOrHandles =    document.getElementById("Client2Accessories_StrapsOrHandles")
+                            Client2Accessories_GearBar =            document.getElementById("Client2Accessories_GearBar")
+                            Client2Accessories_StopperSettings =    document.getElementById("Client2Accessories_StopperSettings")
+
+                        }
+                    }
+                    */
+                }
+
+
+            function showModalFields() {
+                if(@((int)Model.SessionType) == @((int)SessionType.SemiPrivate)){
+
+                } else {
+
+                }
+                if (@((int)Model.SessionType) == @((int)SessionType.Physio)){
+
+                } else {
+
+                }
+            }
+
+            function isFormValid() {
+                let jqueryValid = true;
+
+                if (jqueryForm && jqueryForm.data("validator")) {
+                    jqueryForm.data("validator").settings.ignore = [];
+                    jqueryValid = jqueryForm.valid();
+                }
+
+                return jqueryValid && form.checkValidity();
+            }
+
+            /*
+            confirmButton.addEventListener("click", function () {
+                confirmationField.value = "confirm";
+            });
+
+            submitButton.addEventListener("click", function () {
+                confirmationField.value = "submit";
+            });
+
+            form.addEventListener("submit", function (ev) {
+                if (confirmationField.value !== "confirm") {
+                    return;
+                }
+
+                if (!isFormValid()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                ev.preventDefault();
+                populateModal();
+                showModalFields();
+                modal.show();
+            });
+            */
+        })();
+    </script>
+}

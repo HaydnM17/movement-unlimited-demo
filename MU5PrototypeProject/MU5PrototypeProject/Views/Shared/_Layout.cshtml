@@ -1,0 +1,407 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - MU5PrototypeProject</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/MU5PrototypeProject.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <a href="#maincontent" class="skip-link">Skip to main content</a>
+    <header class="siteHeader">
+        <div class="container">
+            <div class="headerBar">
+                <a asp-controller="Home"
+                   asp-action="Index"
+                   class="logoBox text-decoration-none d-inline-block">
+                    <!-- logo drops you back to landing -->
+                    <img src="~/assets/Movement_Unlimited_O_Logo_500px.png" id="imgLogo" alt="Movement Unlimited logo" />
+                </a>
+
+                <nav class="navbar navbar-expand-lg p-0 classicNav">
+                    <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
+                            aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="collapse navbar-collapse" id="mainNavbar">
+                        @if (User.Identity?.IsAuthenticated ?? false)
+                        {
+                            <ul class="navbar-nav classicNavMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link classicNavLink" asp-controller="Home" asp-action="Index">Dashboard</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link classicNavLink" asp-controller="Client" asp-action="Index">Clients</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link classicNavLink" asp-controller="Session" asp-action="Index">Sessions</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link classicNavLink" asp-controller="Reports" asp-action="Index">Reports</a>
+                                </li>
+                                @if (User.IsInRole(AppRoles.Owner))
+                                {
+                                    <li class="nav-item">
+                                        <a class="nav-link classicNavLink" asp-controller="Accounts" asp-action="Index">Accounts</a>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </nav>
+
+                <partial name="_LoginPartial" />
+
+                <!-- quick help slideout -->
+                <button class="helpButton" type="button" id="helpToggleBtn"
+                        aria-expanded="false" aria-controls="helpPanel">
+                    ?
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="appShell">
+        <div class="container pageContent">
+            <main role="main" class="pb-3" id="maincontent" tabindex="-1">
+                @RenderBody()
+            </main>
+        </div>
+
+        @{
+            var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+            var action = ViewContext.RouteData.Values["action"]?.ToString();
+        }
+
+        <aside id="helpPanel" class="helpPanel" aria-label="Help panel">
+            <div class="helpPanel-header">
+                <h2 id="helpPanelLabel" class="helpPanel-title">
+                    <span aria-hidden="true">&#x2753;</span> Help
+                </h2>
+                <button type="button" class="btn-close" id="helpCloseBtn" aria-label="Close help panel"></button>
+            </div>
+            <div class="helpPanel-body">
+
+                @* ── Landing / Home ── *@
+                @if (controller == "Home" && action == "Index")
+                {
+                    <h3>Dashboard</h3>
+                    <p>Your home screen showing <strong>5 most recently updated sessions</strong> at a glance.</p>
+                    <hr />
+                    <h4>Navigation</h4>
+                    <ul>
+                        <li><strong>Clients</strong> — manage client records (view, create, edit, archive).</li>
+                        <li><strong>Sessions</strong> — manage session records (view, create, edit, archive).</li>
+                    </ul>
+                }
+
+                @* ── Session Index ── *@
+                else if (controller == "Session" && action == "Index")
+                {
+                    <h3>Sessions List</h3>
+                    <p>Browse all active sessions. Use the filters and search to find what you need.</p>
+                    <hr />
+                    <h4>Filtering &amp; Searching</h4>
+                    <ul>
+                        <li>Type a <strong>client name</strong> in the search box to filter by client.</li>
+                        <li>Choose a <strong>trainer</strong> from the drop-down to filter by trainer.</li>
+                        <li>Use <strong>Session State</strong> to filter by Opened, Logged, Completed, or Canceled sessions.</li>
+                        <li>Click any column heading to sort by that column. Click again to reverse the order.</li>
+                        <li>Tick <strong>Show Archived</strong> to include archived sessions.</li>
+                    </ul>
+                    <hr />
+                    <h4>Page Buttons</h4>
+                    <ul>
+                        <li><strong>Create New</strong> — add a new session record.</li>
+                        <li><strong>Details</strong> — view the full session summary.</li>
+                        <li><strong>Edit</strong> — update session information.</li>
+                        <li><strong>Cancel Session</strong> — future Opened sessions can be canceled by Owner or Administration with a required reason.</li>
+                        <li><strong>Archive</strong> — hides non-canceled sessions from the default list without deleting them.</li>
+                    </ul>
+                    <partial name="_HelpWorkflow" />
+                }
+
+                @* ── Session Details ── *@
+                else if (controller == "Session" && action == "Details")
+                {
+                    <h3>Session Details</h3>
+                    <p>A read-only summary of everything recorded for this session.</p>
+                    <hr />
+                    <h4>Sections</h4>
+                    <ul>
+                        <li><strong>General Info</strong> — session type, date, trainer and client.</li>
+                        <li><strong>Session Notes</strong> — goals, SOAP-style notes (Subjective, Objective, Plan).</li>
+                        <li><strong>Actions</strong> — exercises performed, spring settings, props and notes.</li>
+                        <li><strong>Accessories</strong> — equipment setup (head pad, straps, gear bar, etc.).</li>
+                        <li><strong>Next Steps</strong> — follow-up tasks and referral information.</li>
+                        <li><strong>Physio Info</strong> — insurance and physiotherapist details (Physio sessions only).</li>
+                        <li><strong>Admin Completion</strong> — payment status and admin initials.</li>
+                    </ul>
+                    <hr />
+                    <h4>Page Buttons</h4>
+                    <ul>
+                        <li><strong>Edit</strong> — make changes to this session.</li>
+                        <li><strong>Cancel Session</strong> — cancels and archives a future Opened session with a required reason.</li>
+                        <li><strong>Archive / Restore</strong> — archive regular sessions or restore canceled sessions when allowed.</li>
+                        <li><strong>Back to Sessions</strong> — return to the sessions list.</li>
+                    </ul>
+                    <partial name="_HelpWorkflow" />
+                }
+
+                @* ── Session Create ── *@
+                else if (controller == "Session" && action == "Create")
+                {
+                    <h3>Create Session</h3>
+                    <p>Fill in all required fields (<span style="color:darkred">*</span>) and click <strong>Save</strong>.</p>
+                    <hr />
+                    <h4>General Info</h4>
+                    <ul>
+                        <li><strong>Session Type</strong> — Private, Semi-Private, or Physio.</li>
+                        <li><strong>Session Date (YYYY-MM-DD)</strong> — must be today or a future date.</li>
+                        <li><strong>Client</strong> — start typing to search the client list.</li>
+                        <li><strong>Semi-Private</strong> — selecting this reveals a second client and a second set of client-specific sections.</li>
+                        <li><strong>Trainer</strong> — select the trainer running the session.</li>
+                    </ul>
+                    <hr />
+                    <h4>Session Notes (SOAP)</h4>
+                    <ul>
+                        <li><strong>Goals</strong> — short and long-term goals for the client.</li>
+                        <li><strong>Subjective</strong> — what the client reports (pain, energy, mood).</li>
+                        <li><strong>Objective</strong> — what you observe or measure.</li>
+                        <li><strong>Plan</strong> — what will happen next session.</li>
+                    </ul>
+                    <hr />
+                    <h4>Actions (Exercises)</h4>
+                    <ul>
+                        <li><strong>Select Exercises (Optional)</strong> — choose exercises to add to this session.</li>
+                        
+                        <li>You can add more exercises after creating the session.</li>
+                    </ul>
+                    <partial name="_HelpWorkflow" />
+                }
+
+                @* ── Session Edit ── *@
+                else if (controller == "Session" && action == "Edit")
+                {
+                    <h3>Edit Session</h3>
+                    <p>Update the session record. Session type, date, trainer and client are locked after creation.</p>
+                    <hr />
+                    <h4>What can be edited?</h4>
+                    <ul>
+                        <li>Sessions per week recommendation</li>
+                        <li>Session Notes (Goals, SOAP fields)</li>
+                        <li>Accessories setup</li>
+                        <li>Next Steps and referral details</li>
+                        <li>Physio insurance information</li>
+                        <li>Admin completion fields</li>
+                    </ul>
+                    <hr />
+                    <h4>Actions (Exercises)</h4>
+                    <ul>
+                        <li><strong>+ Add Action</strong> — add a new exercise to this session.</li>
+                        <li><strong>Edit</strong> — modify an existing exercise (springs, props, notes).</li>
+                        <li><strong>Delete</strong> — remove an exercise from this session.</li>
+                    </ul>
+                    <hr />
+                    <h4>Spring Setting Guide</h4>
+                    <ul>
+                        <li><strong>R</strong> = Red (Heavy)</li>
+                        <li><strong>B</strong> = Blue (Medium)</li>
+                        <li><strong>Y</strong> = Yellow (Light)</li>
+                        <li><strong>G</strong> = Green (Light)</li>
+                    </ul>
+                    <hr />
+                    <h4>Stopper &amp; Gear Bar</h4>
+                    <ul>
+                        <li>Gear Bar: 1 – 3</li>
+                        <li>Stopper Settings: 1 – 6</li>
+                    </ul>
+                    <partial name="_HelpWorkflow" />
+                }
+
+                @* ── Client Index ── *@
+                else if (controller == "Client" && action == "Index")
+                {
+                    <h3>Clients List</h3>
+                    <p>Browse all active clients. Use the search box to find a client by name.</p>
+                    <hr />
+                    <h4>Page Buttons</h4>
+                    <ul>
+                        <li><strong>Create New</strong> — add a new client record.</li>
+                        <li><strong>Details</strong> — view the client's full profile and session history.</li>
+                        <li><strong>Edit</strong> — update client information.</li>
+                        <li><strong>Archive</strong> — hides the client from the default list without deleting the record.</li>
+                    </ul>
+                }
+
+                @* ── Client Create ── *@
+                else if (controller == "Client" && action == "Create")
+                {
+                    <h3>Create Client</h3>
+                    <p>Enter the client's personal details. All required fields are marked with <span style="color:darkred">*</span>.</p>
+                    <hr />
+                    <h4>Fields</h4>
+                    <ul>
+                        <li><strong>First / Last Name</strong> — client's legal name.</li>
+                        <li><strong>Date of Birth</strong> — use the browser date picker; combined with name, this helps uniquely identify the client.</li>
+                        <li><strong>Phone</strong> — 10-digit number, digits only.</li>
+                        <li><strong>Email</strong> — optional contact email.</li>
+                        <li><strong>Client Folder URL</strong> — link to the client's document folder (optional).</li>
+                    </ul>
+                }
+
+                @* ── Client Edit ── *@
+                else if (controller == "Client" && action == "Edit")
+                {
+                    <h3>Edit Client</h3>
+                    <p>Update the client's information and click <strong>Save</strong>.</p>
+                    <hr />
+                    <h4>Notes</h4>
+                    <ul>
+                        <li>Date of Birth combined with name must remain unique across all clients.</li>
+                        <li>Phone must be exactly 10 digits.</li>
+                    </ul>
+                }
+
+                @* ── Client Details ── *@
+                else if (controller == "Client" && action == "Details")
+                {
+                    <h3>Client Profile</h3>
+                    <p>View the client's personal information and session history.</p>
+                    <hr />
+                    <h4>Sections</h4>
+                    <ul>
+                        <li><strong>Personal Info</strong> — client's name, DOB, phone, email and folder URL.</li>
+                        <li><strong>Session History</strong> — list of all sessions for this client (most recent first).</li>
+                    </ul>
+                    <hr />
+                    <h4>Page Buttons</h4>
+                    <ul>
+                        <li><strong>Edit</strong> — update the client's personal information.</li>
+                        <li><strong>Add Session</strong> — create a new session for this client.</li>
+                        <li><strong>Archive / Unarchive</strong> — toggle the archived state of the client.</li>
+                        <li><strong>Back to Clients</strong> — return to the clients list.</li>
+                    </ul>
+                }
+
+                @* ── Accounts Create ── *@
+                else if (controller == "Accounts" && action == "Create")
+                {
+                    <h3>Create Staff Account</h3>
+                    <p>Create a new staff login, assign the correct role, and set a temporary password for first sign-in.</p>
+                    <hr />
+                    <h4>Form Sections</h4>
+                    <ul>
+                        <li><strong>Staff Details</strong> — first name, last name, and staff email used for sign-in.</li>
+                        <li><strong>Access Setup</strong> — choose the staff role and optionally link a trainer record for trainer accounts.</li>
+                        <li><strong>Temporary Password</strong> — enter a secure password the staff member will change after their first login.</li>
+                        <li><strong>Account Status</strong> — decide whether the new login should be active right away.</li>
+                    </ul>
+                    <hr />
+                    <h4>Password Rules</h4>
+                    <ul>
+                        <li>Passwords must be at least 12 characters long.</li>
+                        <li>Passwords must include uppercase and lowercase letters, a number, and a symbol.</li>
+                        <li>Use the show/hide button to double-check the temporary password before saving.</li>
+                    </ul>
+                }
+
+                @* ── Accounts Index ── *@
+                else if (controller == "Accounts")
+                {
+                    <h3>Staff Accounts</h3>
+                    <p>Manage staff sign-in access, roles, activation status, and linked trainer records.</p>
+                    <hr />
+                    <h4>Columns</h4>
+                    <ul>
+                        <li><strong>Status</strong> shows whether the account can currently sign in.</li>
+                        <li><strong>Trainer Link</strong> shows which trainer record is connected to the login, if any.</li>
+                        <li><strong>Password</strong> shows whether the staff member still needs to change their temporary password.</li>
+                    </ul>
+                    <hr />
+                    <h4>Actions</h4>
+                    <ul>
+                        <li><strong>Create Account</strong> opens the staff account setup form.</li>
+                        <li><strong>Activate / Deactivate</strong> changes whether a staff member can sign in.</li>
+                        <li>The system protects the current account, bootstrap owner, and only active owner from accidental deactivation.</li>
+                    </ul>
+                    <hr />
+                    <h4>Simultaneous Logins</h4>
+                    <p>Multiple people can be signed into the same account at the same time from different devices or browsers. Each login session is independent, so signing in on a new device does not sign out existing sessions.</p>
+                }
+
+                @* ── Reports ── *@
+                else if (controller == "Reports")
+                {
+                    <h3>Reports</h3>
+                    <p>View aggregate statistics across sessions, clients, trainers, and exercises.</p>
+                    <hr />
+                    <h4>Date Range</h4>
+                    <ul>
+                        <li>Use the <strong>preset buttons</strong> to quickly filter by common periods.</li>
+                        <li>Use the <strong>custom date fields</strong> and click <strong>Apply</strong> for a specific range.</li>
+                    </ul>
+                    <hr />
+                    <h4>Tabs</h4>
+                    <ul>
+                        <li><strong>Session Statistics</strong> — totals by type, weekly and monthly breakdowns, status counts.</li>
+                        <li><strong>Client Analytics</strong> — most active clients, average sessions per client.</li>
+                        <li><strong>Trainer Workload</strong> — sessions per trainer with type breakdown and unique client counts.</li>
+                        <li><strong>Exercise Popularity</strong> — top exercises, apparatus usage, and prop usage.</li>
+                    </ul>
+                }
+
+                @* ── Fallback ── *@
+                else
+                {
+                    <h3>Help</h3>
+                    <p>Use the navigation bar at the top to get around the app.</p>
+                    <hr />
+                    <ul>
+                        <li><strong>Landing</strong> — home screen with recent sessions.</li>
+                        <li><strong>Clients</strong> — manage client records.</li>
+                        <li><strong>Sessions</strong> — manage session records.</li>
+                    </ul>
+                }
+
+            </div>
+        </aside>
+    </div>
+
+    <footer class="siteFooter mt-auto py-3">
+        <div class="container text-center">
+            <div>SUM Solutions 2026</div>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var btn   = document.getElementById('helpToggleBtn');
+            var close = document.getElementById('helpCloseBtn');
+            var panel = document.getElementById('helpPanel');
+
+            function openPanel() {
+                panel.classList.add('is-open');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+            function closePanel() {
+                panel.classList.remove('is-open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+
+            btn.addEventListener('click', function () {
+                panel.classList.contains('is-open') ? closePanel() : openPanel();
+            });
+            close.addEventListener('click', closePanel);
+        })();
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

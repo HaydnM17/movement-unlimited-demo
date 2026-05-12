@@ -1,0 +1,556 @@
+@model MU5PrototypeProject.Models.ViewModels.ActionCreateVM
+
+<h2>Add Excercise</h2>
+
+<form asp-action="AddAction" method="post" id="addActionForm">
+    @Html.AntiForgeryToken()
+
+    <input type="hidden" asp-for="SessionID" />
+    <input type="hidden" asp-for="SessionClientID" />
+
+    <!-- Apparatus Filter -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label">Apparatus</label>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newApparatusModal">
+                <i class="bi bi-plus-circle"></i> Add New Apparatus
+            </button>
+        </div>
+        <select id="apparatusFilter" class="form-select">
+            <option value="">-- All Apparatus --</option>
+            @if (ViewBag.ApparatusID != null)
+            {
+                @foreach (var item in ViewBag.ApparatusID)
+                {
+                    <option value="@item.Value">@item.Text</option>
+                }
+            }
+        </select>
+    </div>
+
+    <!-- Exercise Selection -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label asp-for="ExerciseID" class="form-label"></label>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newExerciseModal">
+                <i class="bi bi-plus-circle"></i> Add New Exercise
+            </button>
+        </div>
+        <select asp-for="ExerciseID" class="form-select" asp-items="Model.ExerciseList" id="exerciseSelect">
+            <option value="">-- Select exercise --</option>
+        </select>
+        <span asp-validation-for="ExerciseID" class="text-danger"></span>
+    </div>
+
+    <!-- Springs -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label" asp-for="Springs"></label>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newSpringModal">
+                <i class="bi bi-plus-circle"></i> Add New Spring
+            </button>
+        </div>
+        <input type="hidden" asp-for="Springs" id="springsValue" />
+        <div class="input-group mb-2">
+            <select class="form-select" id="springsSelect">
+                <option value="">-- Select spring --</option>
+            </select>
+            <button class="btn btn-outline-secondary" type="button" id="addSpringBtn">Add</button>
+        </div>
+        <div id="selectedSpringsContainer" class="selected-tags"></div>
+    </div>
+
+    <!-- Props -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label">Props</label>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newPropModal">
+                <i class="bi bi-plus-circle"></i> Add New Prop
+            </button>
+        </div>
+        <div class="input-group mb-2">
+            <select class="form-select" id="propSelect">
+                <option value="">-- Select prop --</option>
+                @if (Model.PropList != null)
+                {
+                    foreach (var prop in Model.PropList)
+                    {
+                        <option value="@prop.Value">@prop.Text</option>
+                    }
+                }
+            </select>
+            <button class="btn btn-outline-secondary" type="button" id="addPropBtn">Add</button>
+        </div>
+        <div id="selectedPropsContainer" class="selected-tags">
+            @if (Model.PropList != null && Model.SelectedPropIDs != null)
+            {
+                foreach (var prop in Model.PropList.Where(p => int.TryParse(p.Value, out var parsedId) && Model.SelectedPropIDs.Contains(parsedId)))
+                {
+                    <span class="badge text-bg-primary selected-tag prop-tag" data-prop-id="@prop.Value">
+                        @prop.Text
+                        <button type="button" class="btn-close btn-close-white ms-2 remove-tag remove-prop" aria-label="Remove" data-prop-id="@prop.Value"></button>
+                    </span>
+                }
+            }
+        </div>
+        <div id="selectedPropsInputs">
+            @if (Model.SelectedPropIDs != null)
+            {
+                foreach (var propId in Model.SelectedPropIDs.Distinct())
+                {
+                    <input type="hidden" name="SelectedPropIDs" value="@propId" data-prop-id="@propId" />
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Notes" class="form-label"></label>
+        <textarea asp-for="Notes" class="form-control" style="resize:none;"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Excercise</button>
+    <a asp-action="Edit" asp-route-id="@Model.SessionID" class="btn btn-secondary">Cancel</a>
+</form>
+
+<!-- New Exercise Modal -->
+<div class="modal fade" id="newExerciseModal" tabindex="-1" aria-labelledby="newExerciseLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newExerciseLabel">Add New Exercise</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newExerciseName" class="form-label">Exercise Name</label>
+                    <input type="text" class="form-control" id="newExerciseName">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewExercise()">Add Exercise</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Apparatus Modal -->
+<div class="modal fade" id="newApparatusModal" tabindex="-1" aria-labelledby="newApparatusLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newApparatusLabel">Add New Apparatus</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newApparatusName" class="form-label">Apparatus Name</label>
+                    <input type="text" class="form-control" id="newApparatusName">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewApparatus()">Add Apparatus</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Spring Modal -->
+<div class="modal fade" id="newSpringModal" tabindex="-1" aria-labelledby="newSpringLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newSpringLabel">Add New Spring</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newSpringName" class="form-label">Spring Name</label>
+                    <input type="text" class="form-control" id="newSpringName">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewSpring()">Add Spring</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Prop Modal -->
+<div class="modal fade" id="newPropModal" tabindex="-1" aria-labelledby="newPropLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newPropLabel">Add New Prop</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="newPropName" class="form-label">Prop Name</label>
+                    <input type="text" class="form-control" id="newPropName">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addNewProp()">Add Prop</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .selected-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-height: 38px;
+        padding: 6px;
+        border: 1px solid #dee2e6;
+        border-radius: .375rem;
+        background: #fff;
+    }
+
+    .selected-tag {
+        display: flex;
+        align-items: center;
+        padding: .5rem .65rem;
+    }
+
+    .selected-tag .remove-tag {
+        font-size: .6rem;
+    }
+</style>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script>
+        let springsData = @Html.Raw(ViewBag.SpringsJson ?? "[]");
+
+        const springsValueInput = document.getElementById('springsValue');
+        const selectedSpringsContainer = document.getElementById('selectedSpringsContainer');
+        const selectedPropsContainer = document.getElementById('selectedPropsContainer');
+        const selectedPropsInputs = document.getElementById('selectedPropsInputs');
+        const selectedSpringNames = new Set((springsValueInput.value || '')
+            .split(',')
+            .map(x => x.trim())
+            .filter(Boolean));
+
+        const selectedPropIds = new Set(Array.from(selectedPropsInputs.querySelectorAll('input[name="SelectedPropIDs"]'))
+            .map(i => parseInt(i.value, 10))
+            .filter(n => !Number.isNaN(n)));
+
+        const propNameMap = new Map();
+        Array.from(document.getElementById('propSelect').options)
+            .filter(o => o.value)
+            .forEach(o => propNameMap.set(parseInt(o.value, 10), o.text));
+
+        function springNameOf(item) {
+            return item.springName || item.SpringName || '';
+        }
+
+        function populateSprings() {
+            const select = document.getElementById('springsSelect');
+            const names = [...new Set(springsData
+                .flatMap(s => springNameOf(s).split(','))
+                .map(s => s.trim())
+                .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+            select.innerHTML = '<option value="">-- Select spring --</option>';
+            names.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderSelectedSprings() {
+            selectedSpringsContainer.innerHTML = '';
+            Array.from(selectedSpringNames).forEach(name => {
+                const tag = document.createElement('span');
+                tag.className = 'badge text-bg-primary selected-tag spring-tag';
+                tag.setAttribute('data-spring-name', name);
+                tag.innerHTML = `${name}<button type="button" class="btn-close btn-close-white ms-2 remove-tag remove-spring" aria-label="Remove" data-spring-name="${name}"></button>`;
+                selectedSpringsContainer.appendChild(tag);
+            });
+
+            springsValueInput.value = Array.from(selectedSpringNames).join(', ');
+        }
+
+        function renderSelectedProps() {
+            selectedPropsContainer.innerHTML = '';
+            selectedPropsInputs.innerHTML = '';
+
+            Array.from(selectedPropIds).forEach(propId => {
+                const propName = propNameMap.get(propId);
+                if (!propName) {
+                    return;
+                }
+
+                const tag = document.createElement('span');
+                tag.className = 'badge text-bg-primary selected-tag prop-tag';
+                tag.setAttribute('data-prop-id', String(propId));
+                tag.innerHTML = `${propName}<button type="button" class="btn-close btn-close-white ms-2 remove-tag remove-prop" aria-label="Remove" data-prop-id="${propId}"></button>`;
+                selectedPropsContainer.appendChild(tag);
+
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'SelectedPropIDs';
+                input.value = String(propId);
+                input.setAttribute('data-prop-id', String(propId));
+                selectedPropsInputs.appendChild(input);
+            });
+        }
+
+        async function filterExercisesByApparatus(apparatusId, keepExerciseId) {
+            const url = '@Url.Action("GetExercisesByApparatus", "Session")' +
+                (apparatusId ? '?apparatusId=' + apparatusId : '');
+            const response = await fetch(url);
+            const exercises = await response.json();
+            const select = document.getElementById('exerciseSelect');
+            select.innerHTML = '<option value="">-- Select exercise --</option>';
+            exercises.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.id;
+                opt.textContent = e.text;
+                if (keepExerciseId && e.id == keepExerciseId) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function addApparatusOptionToDropdowns(id, name) {
+            const dropdowns = ['apparatusFilter'];
+            dropdowns.forEach(dropId => {
+                const sel = document.getElementById(dropId);
+                if (sel) {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = name;
+                    sel.appendChild(opt);
+                }
+            });
+        }
+
+        document.getElementById('apparatusFilter').addEventListener('change', function () {
+            const apparatusId = this.value;
+            filterExercisesByApparatus(apparatusId, null);
+        });
+
+        document.getElementById('addSpringBtn').addEventListener('click', function () {
+            const selectedSpring = document.getElementById('springsSelect').value;
+            if (!selectedSpring) {
+                return;
+            }
+
+            selectedSpringNames.add(selectedSpring);
+            renderSelectedSprings();
+            document.getElementById('springsSelect').value = '';
+        });
+
+        document.getElementById('addPropBtn').addEventListener('click', function () {
+            const selectedProp = document.getElementById('propSelect').value;
+            if (!selectedProp) {
+                return;
+            }
+
+            selectedPropIds.add(parseInt(selectedProp, 10));
+            renderSelectedProps();
+            document.getElementById('propSelect').value = '';
+        });
+
+        selectedSpringsContainer.addEventListener('click', function (event) {
+            const target = event.target;
+            if (target.classList.contains('remove-spring')) {
+                selectedSpringNames.delete(target.getAttribute('data-spring-name'));
+                renderSelectedSprings();
+            }
+        });
+
+        selectedPropsContainer.addEventListener('click', function (event) {
+            const target = event.target;
+            if (target.classList.contains('remove-prop')) {
+                selectedPropIds.delete(parseInt(target.getAttribute('data-prop-id'), 10));
+                renderSelectedProps();
+            }
+        });
+
+        // Initialise springs with all options on page load
+        populateSprings();
+        renderSelectedSprings();
+        renderSelectedProps();
+
+        async function addNewExercise() {
+            const name = document.getElementById('newExerciseName').value.trim();
+
+            if (!name) {
+                alert('Please enter an exercise name');
+                return;
+            }
+
+            try {
+                const response = await fetch('@Url.Action("CreateExerciseAjax", "Session")?' +
+                    new URLSearchParams({
+                        exerciseName: name
+                    }),
+                {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]').value
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const select = document.getElementById('exerciseSelect');
+                    const option = document.createElement('option');
+                    option.value = data.id;
+                    option.text = data.displayName;
+                    select.appendChild(option);
+                    select.value = data.id;
+
+                    const exerciseModal = bootstrap.Modal.getInstance(document.getElementById('newExerciseModal'));
+                    if (exerciseModal) exerciseModal.hide();
+                    document.getElementById('newExerciseName').value = '';
+                } else {
+                    alert('Error: ' + (data.message || response.statusText));
+                    console.error('Response:', data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error adding exercise: ' + error.message);
+            }
+        }
+
+        async function addNewApparatus() {
+            const name = document.getElementById('newApparatusName').value.trim();
+
+            if (!name) {
+                alert('Please enter an apparatus name');
+                return;
+            }
+
+            try {
+                const response = await fetch('@Url.Action("CreateApparatusAjax", "Session")?' +
+                    new URLSearchParams({
+                        apparatusName: name
+                    }),
+                {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]').value
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addApparatusOptionToDropdowns(data.id, data.name);
+
+                    const apparatusModal = bootstrap.Modal.getInstance(document.getElementById('newApparatusModal'));
+                    if (apparatusModal) apparatusModal.hide();
+                    document.getElementById('newApparatusName').value = '';
+                } else {
+                    alert('Error: ' + (data.message || response.statusText));
+                    console.error('Response:', data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error adding apparatus: ' + error.message);
+            }
+        }
+
+        async function addNewSpring() {
+            const name = document.getElementById('newSpringName').value.trim();
+
+            if (!name) {
+                alert('Please enter a spring name');
+                return;
+            }
+
+            try {
+                const response = await fetch('@Url.Action("CreateSpringAjax", "Session")?' +
+                    new URLSearchParams({
+                        springName: name
+                    }),
+                {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]').value
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    springsData.push({ springName: data.name });
+                    populateSprings();
+                    selectedSpringNames.add(data.name);
+                    renderSelectedSprings();
+
+                    const springModal = bootstrap.Modal.getInstance(document.getElementById('newSpringModal'));
+                    if (springModal) springModal.hide();
+                    document.getElementById('newSpringName').value = '';
+                } else {
+                    alert('Error: ' + (data.message || response.statusText));
+                    console.error('Response:', data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error adding spring: ' + error.message);
+            }
+        }
+
+        async function addNewProp() {
+            const name = document.getElementById('newPropName').value.trim();
+
+            if (!name) {
+                alert('Please enter a prop name');
+                return;
+            }
+
+            try {
+                const response = await fetch('@Url.Action("CreatePropAjax", "Session")?' +
+                    new URLSearchParams({
+                        propName: name
+                    }),
+                {
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('[name="__RequestVerificationToken"]').value
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const select = document.getElementById('propSelect');
+                    const option = document.createElement('option');
+                    option.value = data.id;
+                    option.text = data.name;
+                    select.appendChild(option);
+
+                    propNameMap.set(parseInt(data.id, 10), data.name);
+                    selectedPropIds.add(parseInt(data.id, 10));
+                    renderSelectedProps();
+
+                    const propModal = bootstrap.Modal.getInstance(document.getElementById('newPropModal'));
+                    if (propModal) propModal.hide();
+                    document.getElementById('newPropName').value = '';
+                } else {
+                    alert('Error: ' + (data.message || response.statusText));
+                    console.error('Response:', data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error adding prop: ' + error.message);
+            }
+        }
+    </script>
+}

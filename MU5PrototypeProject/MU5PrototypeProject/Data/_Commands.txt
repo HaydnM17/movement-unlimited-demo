@@ -1,0 +1,7 @@
+
+For troubleshooting, delete old migrations and database then run commands
+
+	Add-Migration -Context ApplicationDbContext -o Data/Migrations Initial
+	Update-Database -Context ApplicationDbContext
+	Add-Migration -Context MUContext -o Data/MUMigrations Initial
+	Update-Database -Context MUContext

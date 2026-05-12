@@ -1,0 +1,241 @@
+@using MU5PrototypeProject.Models
+@model MU5PrototypeProject.Models.ViewModels.SessionUpsertVM
+
+@{
+    ViewData["Title"] = "Create Session";
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Create Session</h1>
+</div>
+
+<partial name="_SessionWorkflowProgress" model="SessionStatus.Opened" />
+
+<form asp-action="Create" method="post" id="pageForm" class="sectionStack editShell">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">General Info</h2>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="SessionType" class="form-label"></label>
+                <select asp-for="SessionType" class="form-control" asp-items="Html.GetEnumSelectList<SessionType>()"></select>
+                <span asp-validation-for="SessionType" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="SessionDate" class="form-label"></label><span class="text-danger"> *</span>
+                <input asp-for="SessionDate" class="form-control" type="date" lang="en-CA" />
+                <span asp-validation-for="SessionDate" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="TrainerID" class="form-label"></label><span class="text-danger"> *</span>
+                <select asp-for="TrainerID" class="form-control" asp-items="ViewBag.TrainerID">
+                    <option value="">Select a Teacher</option>
+                </select>
+                <span asp-validation-for="TrainerID" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="ClientID" class="form-label"></label><span class="text-danger"> *</span>
+                <select asp-for="ClientID" class="form-control" asp-items="ViewBag.ClientID">
+                    <option value="">Select a Client</option>
+                </select>
+                <span asp-validation-for="ClientID" class="text-danger"></span>
+            </div>
+            <div class="col-md-4 semiPrivateOnly">
+                <label asp-for="Client2ID" class="form-label">Client Two</label><span class="text-danger"> *</span>
+                <select asp-for="Client2ID" class="form-control" asp-items="ViewBag.ClientID">
+                    <option value="">Select a Second Client</option>
+                </select>
+                <span asp-validation-for="Client2ID" class="text-danger"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="formActions pageFooterActions workflowActionBar">
+        <div class="workflowActionButtons">
+            <input type="hidden" id="confirmation" name="confirmation" value="confirm" />
+            <button type="submit"
+                    id="btnConfirm"
+                    name="Status"
+                    value="@SessionStatus.Opened"
+                    class="mu-btn mu-btn-primary is-selected workflowActionButton">
+                Save as Opened
+            </button>
+            <button type="button"
+                    id="btnFill"
+                    class="mu-btn mu-btn-secondary is-selected workflowActionButton"
+                    onclick="FillCreate()">
+                Fill Fields
+            </button>
+        </div>
+        <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Sessions</a>
+    </div>
+</form>
+
+<div class="modal fade" id="mymodal" tabindex="-1" aria-labelledby="sessionCreateConfirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+        <div class="modal-content mu-modal">
+            <div class="mu-modal-accent"></div>
+            <div class="modal-header mu-modal-header">
+                <div>
+                    <span class="mu-modal-badge">Review Session</span>
+                    <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="sessionCreateConfirmTitle">Confirm session details</h2>
+                    <p class="mu-modal-copy">Please review the session details before saving it.</p>
+                </div>
+                <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body mu-modal-body">
+                <div class="detailFields clientConfirmGrid">
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Session Type</span>
+                        <div id="ModalSessionType" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Session Date</span>
+                        <div id="ModalSessionDate" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Trainer</span>
+                        <div id="ModalTrainer" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div class="detailField">
+                        <span class="detailFieldLabel">Client</span>
+                        <div id="ModalClient" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                    <div id="ModalClient2Container" class="detailField">
+                        <span class="detailFieldLabel">Client Two</span>
+                        <div id="ModalClient2" class="detailFieldValue clientTextValue"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer mu-modal-footer">
+                <input id="btnsubmit" type="submit" form="pageForm" value="Confirm" class="mu-btn mu-btn-primary" />
+                <button type="button" class="mu-btn mu-btn-ghost" data-bs-dismiss="modal">Back to Form</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+@{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        function FillCreate() {
+
+            if (document.getElementById("ClientID").value < 2){
+                document.getElementById("ClientID").value = 2;
+            }
+            if (document.getElementById("SessionType").value == @((int)SessionType.SemiPrivate)){
+                document.getElementById("Client2ID").value = 1
+            }
+
+            //document.getElementById("SessionDate").value = "2026-04-14"
+            document.getElementById("TrainerID").selectedIndex = 1;
+        }
+
+        (function () {
+            const sessionTypeField = document.getElementById("SessionType");
+            const semiPrivateValue = "@((int)SessionType.SemiPrivate)";
+            const semiPrivateSections = document.querySelectorAll(".semiPrivateOnly");
+            const semiPrivateFields = document.querySelectorAll(".semiPrivateOnly input, .semiPrivateOnly select, .semiPrivateOnly textarea");
+
+            function syncSections() {
+                const isSemiPrivate = sessionTypeField && sessionTypeField.value === semiPrivateValue;
+
+                semiPrivateSections.forEach(section => section.classList.toggle("d-none", !isSemiPrivate));
+                semiPrivateFields.forEach(field => field.disabled = !isSemiPrivate);
+            }
+
+            if (sessionTypeField) {
+                sessionTypeField.addEventListener("change", syncSections);
+            }
+
+            syncSections();
+
+
+            const form = document.getElementById("pageForm");
+            const confirmButton = document.getElementById("btnConfirm");
+            const submitButton = document.getElementById("btnsubmit");
+            const confirmationField = document.getElementById("confirmation");
+            const modalElement = document.getElementById("mymodal");
+            const modal = new bootstrap.Modal(modalElement);
+            const jqueryForm = window.jQuery ? window.jQuery(form) : null;
+
+            function setModalValue(id, value) {
+                const target = document.getElementById(id);
+                const text = typeof value === "string" ? value.trim() : value;
+                target.textContent = text ? text : "Not provided";
+            }
+
+            function setModalHidden(id, value) {
+                const target = document.getElementById(id);
+                target.hidden = value;
+            }
+
+            const SessionType = document.getElementById("SessionType")
+            const SessionDate = document.getElementById("SessionDate")
+            const TrainerID = document.getElementById("TrainerID")
+            const ClientID = document.getElementById("ClientID")
+            const Client2ID = document.getElementById("Client2ID")
+
+            function populateModal() {
+                setModalValue("ModalSessionType",   SessionType.options[SessionType.selectedIndex].text);
+                setModalValue("ModalSessionDate",   SessionDate.value);
+                setModalValue("ModalTrainer",       TrainerID.options[TrainerID.selectedIndex].text);
+                setModalValue("ModalClient",        ClientID.options[ClientID.selectedIndex].text);
+                setModalValue("ModalClient2",       Client2ID.options[Client2ID.selectedIndex].text)
+            }
+
+            function showModalFields() {
+                if(SessionType.value == @((int)SessionType.SemiPrivate)){
+                    setModalHidden("ModalClient2Container", false)
+                } else {
+                    setModalHidden("ModalClient2Container", true)
+                }
+                if (SessionType.value == @((int)SessionType.Physio)){
+
+                } else {
+
+                }
+            }
+
+            function isFormValid() {
+                let jqueryValid = true;
+
+                if (jqueryForm && jqueryForm.data("validator")) {
+                    jqueryForm.data("validator").settings.ignore = [];
+                    jqueryValid = jqueryForm.valid();
+                }
+
+                return jqueryValid && form.checkValidity();
+            }
+
+            confirmButton.addEventListener("click", function () {
+                confirmationField.value = "confirm";
+            });
+
+            submitButton.addEventListener("click", function () {
+                confirmationField.value = "submit";
+            });
+
+            form.addEventListener("submit", function (ev) {
+                if (confirmationField.value !== "confirm") {
+                    return;
+                }
+
+                if (!isFormValid()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                ev.preventDefault();
+                showModalFields();
+                populateModal();
+                modal.show();
+            });
+        })();
+    </script>
+}

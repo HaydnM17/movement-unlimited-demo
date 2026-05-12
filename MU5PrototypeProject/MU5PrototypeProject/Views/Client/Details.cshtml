@@ -1,0 +1,367 @@
+@model MU5PrototypeProject.Models.Client
+
+@{
+    ViewData["Title"] = "Client Details";
+
+    var dobDisplay = Model.DOB?.ToString("yyyy-MM-dd") ?? "Not provided";
+    var ageDisplay = Model.Age?.ToString() ?? "Unknown";
+    var canManageClients = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+}
+
+<div class="pageHeader pageHeaderSplit clientPageHeader">
+    <div>
+        <h1 class="pageTitle">Client Details</h1>
+        <p class="pageLead">Profile, contact information, and session history for @Model.FullName.</p>
+    </div>
+    <span class="clientStatusPill @(Model.IsArchived ? "is-archived" : "is-active")">
+        @(Model.IsArchived ? "Archived" : "Active")
+    </span>
+</div>
+
+<div class="clientOverviewGrid mb-4">
+    <section class="formSectionCard clientOverviewCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Client</h2>
+        </div>
+        <div class="clientOverviewBody">
+            <div class="clientOverviewField">
+                <span class="clientOverviewLabel">Full Name</span>
+                <div class="clientOverviewValue clientOverviewValue-hero">@Model.FullName</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="formSectionCard clientOverviewCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Date of Birth</h2>
+        </div>
+        <div class="clientOverviewBody clientOverviewBody-inline">
+            <div class="clientOverviewField">
+                <span class="clientOverviewLabel">Date of Birth</span>
+                <div class="clientOverviewValue">@dobDisplay</div>
+            </div>
+            <div class="clientOverviewField clientOverviewField-age">
+                <span class="clientOverviewLabel">Age</span>
+                <div class="clientOverviewValue">@ageDisplay</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="formSectionCard clientOverviewCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Contact</h2>
+        </div>
+        <div class="clientOverviewBody">
+            <div class="clientOverviewField">
+                <span class="clientOverviewLabel">Phone</span>
+                <div class="clientOverviewValue">@Model.PhoneFormatted</div>
+            </div>
+            <div class="clientOverviewField">
+                <span class="clientOverviewLabel">Email</span>
+                <div class="clientOverviewValue clientTextValue clientTextValue-mono clientTextValue-long">
+                    @if (!string.IsNullOrWhiteSpace(Model.Email))
+                    {
+                        <a class="clientOverviewLink clientOverviewLink-break" href="mailto:@Model.Email">@Model.Email</a>
+                    }
+                    else
+                    {
+                        <span>Not provided</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="formSectionCard clientOverviewCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">File Access</h2>
+        </div>
+        <div class="clientOverviewBody">
+            <div class="clientOverviewField">
+                <span class="clientOverviewLabel">Client Folder URL</span>
+                <div class="clientOverviewValue clientTextValue clientTextValue-mono clientTextValue-long">
+                    @if (!string.IsNullOrWhiteSpace(Model.ClientFolderUrl))
+                    {
+                        <a class="clientOverviewLink clientOverviewLink-break" href="@Model.ClientFolderUrl" target="_blank" rel="noopener noreferrer">@Model.ClientFolderUrl</a>
+                    }
+                    else
+                    {
+                        <span>Not provided</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="sectionStack">
+    <div class="formSectionCard">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Sessions</h2>
+        </div>
+
+        @{
+            var sessionSortField = ViewData["sessionSortField"]?.ToString() ?? "Date";
+            var sessionSortDirection = ViewData["sessionSortDirection"]?.ToString() ?? "desc";
+            var pagedSessionParticipations = ViewBag.PagedSessionParticipations as List<MU5PrototypeProject.Models.SessionClient>;
+            var editableSessionIds = ViewData["EditableSessionIds"] as ISet<int> ?? new HashSet<int>();
+            int sessionPage = (int)(ViewData["sessionPage"] ?? 1);
+            int sessionTotalPages = (int)(ViewData["sessionTotalPages"] ?? 1);
+
+            string SortIcon(string field) => sessionSortField == field
+                ? (sessionSortDirection == "asc" ? "↑" : "↓")
+                : "";
+            bool CanEditSession(MU5PrototypeProject.Models.Session session) => editableSessionIds.Contains(session.ID);
+        }
+
+        <form asp-action="Details" asp-route-id="@Model.ID" method="get">
+            <div class="modal fade" id="sessionPageSizeModal" tabindex="-1" role="dialog" aria-labelledby="sessionPageSizeTitle" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title" id="sessionPageSizeTitle">Set Page Size</h2>
+                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3"
+                                    data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="input-group">
+                                <span class="input-group-text">Page Size:</span>
+                                @Html.DropDownList("pageSizeID", ViewData["pageSizeID"] as Microsoft.AspNetCore.Mvc.Rendering.SelectList, new { @class = "form-control" })
+                                <input type="submit" class="btn btn-primary" value="Set Page Size" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <input type="hidden" name="sessionSortField" value="@sessionSortField" />
+            <input type="hidden" name="sessionSortDirection" value="@sessionSortDirection" />
+
+            @if (pagedSessionParticipations == null || !pagedSessionParticipations.Any() && sessionPage == 1)
+            {
+                <p class="detailFieldValue clientEmptyState">No sessions recorded for this client.</p>
+            }
+            else
+            {
+                <table class="table dataTable responsiveTable">
+                    <thead>
+                        <tr>
+                            <th>
+                                <button type="submit" name="actionButton" value="Date" class="sortButton">
+                                    Session Date (YYYY-MM-DD) <span class="sortIndicator">@SortIcon("Date")</span>
+                                </button>
+                            </th>
+                            <th>
+                                <button type="submit" name="actionButton" value="Type" class="sortButton">
+                                    Type <span class="sortIndicator">@SortIcon("Type")</span>
+                                </button>
+                            </th>
+                            <th>
+                                <button type="submit" name="actionButton" value="Trainer" class="sortButton">
+                                    Trainer <span class="sortIndicator">@SortIcon("Trainer")</span>
+                                </button>
+                            </th>
+                            <th>
+                                <button type="submit" name="actionButton" value="Sessions/Week" class="sortButton">
+                                    Sessions/Week <span class="sortIndicator">@SortIcon("Sessions/Week")</span>
+                                </button>
+                            </th>
+                            <th class="actionsCol">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var participation in pagedSessionParticipations!)
+                        {
+                            var session = participation.Session;
+                            if (session == null)
+                            {
+                                continue;
+                            }
+
+                            <tr>
+                                <td data-label="Session Date">@session.SessionDate.ToString("yyyy-MM-dd")</td>
+                                <td data-label="Type">@session.SessionType</td>
+                                <td data-label="Trainer">@session.Trainer?.TrainerName</td>
+                                <td data-label="Sessions/Week">@(participation.SessionsPerWeekRecommended?.ToString() ?? "-")</td>
+                                <td class="actionsCol" data-label="Actions">
+                                    <div class="tableActions">
+                                        @if (session.IsArchived || !CanEditSession(session))
+                                        {
+                                            <span class="actionLink disabledAction" aria-disabled="true">Edit</span>
+                                        }
+                                        else
+                                        {
+                                            <a class="actionLink" asp-controller="Session" asp-action="Edit" asp-route-id="@session.ID">Edit</a>
+                                        }
+                                        <a class="actionLink" asp-controller="Session" asp-action="Details" asp-route-id="@session.ID">Details</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="d-flex justify-content-center align-items-center gap-2 mt-3 mb-2">
+                    <button type="submit" name="page" value="1"
+                            class="mu-btn mu-btn-ghost mu-btn-sm" @(sessionPage <= 1 ? "disabled" : "")>
+                        ⇐ First
+                    </button>
+                    <button type="submit" name="page" value="@(sessionPage - 1)"
+                            class="mu-btn mu-btn-ghost mu-btn-sm" @(sessionPage <= 1 ? "disabled" : "")>
+                        ← Previous
+                    </button>
+                    <button type="button" class="mu-btn mu-btn-accent mu-btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#sessionPageSizeModal">
+                        Pg. @sessionPage of @sessionTotalPages
+                    </button>
+                    <button type="submit" name="page" value="@(sessionPage + 1)"
+                            class="mu-btn mu-btn-ghost mu-btn-sm" @(sessionPage >= sessionTotalPages ? "disabled" : "")>
+                        Next →
+                    </button>
+                    <button type="submit" name="page" value="@sessionTotalPages"
+                            class="mu-btn mu-btn-ghost mu-btn-sm" @(sessionPage >= sessionTotalPages ? "disabled" : "")>
+                        Last ⇒
+                    </button>
+                </div>
+            }
+        </form>
+    </div>
+</div>
+
+<div class="formActions pageFooterActions mb-4">
+    <a asp-controller="Session"
+       asp-action="Create"
+       asp-route-clientId="@Model.ID"
+       class="mu-btn mu-btn-success">
+        Create Session for This Client
+    </a>
+
+    @if (canManageClients && !Model.IsArchived)
+    {
+        <a asp-action="Edit" asp-route-id="@Model.ID" class="mu-btn mu-btn-primary">Edit</a>
+
+        <form asp-action="Archive" id="archiveForm" asp-route-id="@Model.ID" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input id="confirmation" type="hidden" value="confirm" />
+            <input id="archiveType" type="hidden" value="archive" />
+            <button id="btnArchive" type="submit" class="mu-btn mu-btn-danger">Archive</button>
+        </form>
+    }
+    else if (canManageClients && Model.IsArchived)
+    {
+        <form asp-action="Unarchive" id="archiveForm" asp-route-id="@Model.ID" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input id="confirmation" type="hidden" value="confirm" />
+            <input id="archiveType" type="hidden" value="unarchive" />
+            <button id="btnArchive" type="submit" class="mu-btn mu-btn-accent">Unarchive</button>
+        </form>
+    }
+
+    <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Clients</a>
+</div>
+
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+        <div class="modal-content mu-modal">
+            <div class="mu-modal-accent"></div>
+            <div class="modal-header mu-modal-header">
+                <div>
+                    <span class="mu-modal-badge" id="successBadge">Client Saved</span>
+                    <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="successTitle">Client updated</h2>
+                    <p class="mu-modal-copy" id="successMessage">The client record has been saved.</p>
+                </div>
+                <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-footer mu-modal-footer">
+                <button type="button" class="mu-btn mu-btn-primary" data-bs-dismiss="modal">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+        <div class="modal-content mu-modal">
+            <div class="mu-modal-accent mu-modal-accent-warning"></div>
+            <div class="modal-header mu-modal-header">
+                <div>
+                    <span class="mu-modal-badge mu-modal-badge-warning" id="confirmBadge">Archive Client</span>
+                    <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="confirmTitle">Archive this client?</h2>
+                    <p class="mu-modal-copy" id="confirmMessage">Archived clients are hidden from the default list, but they can be restored later.</p>
+                </div>
+                <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-footer mu-modal-footer">
+                <input id="btnArchiveSubmit" type="submit" form="archiveForm" value="Archive Client" class="mu-btn mu-btn-danger" />
+                <button id="btnArchiveCancel" type="button" class="mu-btn mu-btn-ghost" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", startup);
+
+        function startup() {
+            const success = "@(ViewData["PostResult"]?.ToString() ?? "Details")";
+            const successTitle = document.getElementById("successTitle");
+            const successMessage = document.getElementById("successMessage");
+            const successBadge = document.getElementById("successBadge");
+
+            if (success === "Create" || success === "Edit") {
+                const isCreate = success === "Create";
+
+                successBadge.textContent = isCreate ? "Client Created" : "Client Updated";
+                successTitle.textContent = isCreate ? "Client created" : "Client updated";
+                successMessage.textContent = isCreate
+                    ? "The new client record has been created successfully."
+                    : "The client record has been updated successfully.";
+
+                const myModal = new bootstrap.Modal(document.getElementById("successModal"));
+                myModal.show();
+            }
+        }
+
+        const archiveForm = document.forms.namedItem("archiveForm");
+        const confirmButton = document.getElementById("btnArchive");
+        const submitButton = document.getElementById("btnArchiveSubmit");
+        const confirmationField = document.getElementById("confirmation");
+        const archiveType = document.getElementById("archiveType");
+
+        if (archiveForm && confirmButton && submitButton && confirmationField && archiveType) {
+            archiveForm.addEventListener("submit", function (ev) {
+                if (confirmationField.value !== "confirm") {
+                    return;
+                }
+
+                ev.preventDefault();
+
+                const isArchive = archiveType.value === "archive";
+                const modalTitle = document.getElementById("confirmTitle");
+                const modalMessage = document.getElementById("confirmMessage");
+                const modalBadge = document.getElementById("confirmBadge");
+
+                modalBadge.textContent = isArchive ? "Archive Client" : "Restore Client";
+                modalTitle.textContent = isArchive ? "Archive this client?" : "Restore this client?";
+                modalMessage.textContent = isArchive
+                    ? "Archived clients are hidden from the default list, but they can be restored later."
+                    : "This client will return to the active list and be visible in the default client view again.";
+
+                submitButton.value = isArchive ? "Archive Client" : "Unarchive Client";
+                submitButton.classList.remove("mu-btn-danger", "mu-btn-accent");
+                submitButton.classList.add(isArchive ? "mu-btn-danger" : "mu-btn-accent");
+
+                const confirmModal = new bootstrap.Modal(document.getElementById("confirmModal"));
+                confirmModal.show();
+            });
+
+            confirmButton.addEventListener("click", function () {
+                confirmationField.value = "confirm";
+            });
+
+            submitButton.addEventListener("click", function () {
+                confirmationField.value = "submit";
+            });
+        }
+    </script>
+}

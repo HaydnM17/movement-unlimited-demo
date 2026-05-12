@@ -1,0 +1,142 @@
+@model IEnumerable<MU5PrototypeProject.Models.Client>
+
+@{
+    ViewData["Title"] = "Clients";
+    var sortField = ViewData["sortField"]?.ToString() ?? "Client";
+    var sortDirection = ViewData["sortDirection"]?.ToString() ?? "asc";
+    var showFilter = ViewData["ShowFilter"]?.ToString() ?? string.Empty;
+    var filterActive = showFilter.Contains("show", StringComparison.OrdinalIgnoreCase);
+    var canManageClients = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+
+    string SortIndicator(string field) => sortField == field ? (sortDirection == "asc" ? "↑" : "↓") : string.Empty;
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Clients</h1>
+</div>
+
+<form asp-action="Index" method="get">
+    <input type="hidden" name="sortDirection" value="@ViewData["sortDirection"]" />
+    <input type="hidden" name="sortField" value="@ViewData["sortField"]" />
+
+    <div class="pageToolbar">
+        @if (canManageClients)
+        {
+            <a class="mu-btn mu-btn-primary" asp-action="Create">Create New</a>
+        }
+        <button class="mu-btn @(filterActive ? "mu-btn-accent is-active" : "mu-btn-secondary") filterToggle" type="button" data-bs-toggle="collapse" id="filterToggle" data-bs-target="#collapseFilter" aria-expanded="false" aria-controls="collapseFilter">
+            Filter/Search @ViewData["numberFilters"]
+        </button>
+    </div>
+
+    <div class="form-horizontal">
+        <div class="collapse @ViewData["ShowFilter"]" id="collapseFilter">
+            <div class="card card-body bg-light filterCard border-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="SearchName" class="control-label">Search Client Name:</label>
+                            @Html.TextBox("SearchName", null, new { @class = "form-control" })
+                        </div>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="SearchPhone" class="control-label">Search Phone Number:</label>
+                        @Html.TextBox("SearchPhone", null, new { @class = "form-control" })
+                    </div>
+                    <div class="form-group col-md-4">
+                        <div class="form-check mt-4">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   id="showArchived"
+                                   name="showArchived"
+                                   value="true"
+                                   @((bool?)ViewData["showArchived"] == true ? "checked" : "") />
+                            <label class="form-check-label" for="showArchived">
+                                Show archived clients
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group col-md-4 align-self-end">
+                        <button type="submit" name="actionButton" value="Apply" class="mu-btn mu-btn-accent mu-btn-sm">Apply</button>
+                        <a asp-action="Index" class="mu-btn mu-btn-ghost mu-btn-sm">Clear</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* keep the full class stack here - responsiveTable needs the CSS hooks, and tableActions cleans up the button spacing *@
+    <div class="dataBox">
+        <table class="table dataTable clientsTable responsiveTable">
+            <thead>
+                <tr>
+                    <th>
+                        <button type="submit" name="actionButton" value="Client" class="sortButton" aria-label="Sort by client">
+                            <span>Client</span>
+                            @if (!string.IsNullOrEmpty(SortIndicator("Client")))
+                            {
+                                <span class="sortIndicator" aria-hidden="true">@SortIndicator("Client")</span>
+                            }
+                        </button>
+                    </th>
+                    <th>
+                        <span class="tableHeaderLabel">@Html.DisplayNameFor(model => model.Age)</span>
+                    </th>
+                    <th>
+                        <span class="tableHeaderLabel">@Html.DisplayNameFor(model => model.Phone)</span>
+                    </th>
+                    <th>
+                        <span class="tableHeaderLabel">@Html.DisplayNameFor(model => model.Email)</span>
+                    </th>
+@*                     <th>
+                        @Html.DisplayNameFor(model => model.IsArchived)
+                    </th> *@
+                    <th class="actionsCol">
+                        <span class="tableHeaderLabel">Actions</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td data-label="Client" class="cell-wrap">
+                            @Html.DisplayFor(modelItem => item.ClientName)
+                        </td>
+                        <td data-label="Age">
+                            @Html.DisplayFor(modelItem => item.Age)
+                        </td>
+                        <td data-label="Phone">
+                            @Html.DisplayFor(modelItem => item.PhoneFormatted)
+                        </td>
+                        @* data-label feeds the stacked mobile version, so if you rename the column, rename it here too *@
+                        <td data-label="Email" class="cell-wrap clientIndexEmail">
+                            <span class="clientTextValue clientTextValue-mono clientTextValue-long" title="@item.Email">
+                                @(string.IsNullOrWhiteSpace(item.Email) ? "Not provided" : item.Email)
+                            </span>
+                        </td>
+@*                         <td>
+                            @Html.DisplayFor(modelItem => item.IsArchived)
+                        </td> *@
+                        <td class="actionsCol" data-label="Actions">
+                            <div class="tableActions tableActions-inline">
+                                @if (!canManageClients || item.IsArchived)
+                                {
+                                    <span class="actionLink disabledAction" aria-disabled="true">Edit</span>
+                                }
+                                else
+                                {
+                                    <a class="actionLink" asp-action="Edit" asp-route-id="@item.ID">Edit</a>
+                                }
+                                <a class="actionLink" asp-action="Details" asp-route-id="@item.ID">Details</a>
+                                <a class="actionLink" asp-controller="Session" asp-action="Create" asp-route-clientId="@item.ID">Add Session</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <partial name="_PagingNavBar" />
+</form>

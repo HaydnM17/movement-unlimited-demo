@@ -1,0 +1,372 @@
+@model MU5PrototypeProject.Models.Session
+
+@{
+    ViewData["Title"] = "Session Details";
+    var postResult = ViewData["PostResult"]?.ToString() ?? "Details";
+    var editOpenSection = string.Equals(postResult, "Create", StringComparison.OrdinalIgnoreCase) ? "Actions" : null;
+    var orderedParticipants = Model.OrderedSessionClients.ToList();
+    var isSemiPrivate = Model.SessionType == SessionType.SemiPrivate;
+    var isPhysio = Model.SessionType == SessionType.Physio;
+    var isOpenedStage = Model.Status == SessionStatus.Opened;
+    var isLoggedStage = Model.Status == SessionStatus.Logged;
+    var isCompletedStage = Model.Status == SessionStatus.Completed;
+    var isCanceled = Model.IsCanceled;
+    var showLoggedStageSections = isLoggedStage || isCompletedStage;
+    var showPhysioInfoSection = isPhysio && isCompletedStage;
+    var canEditSession = ViewData["CanEditSession"] is bool canEdit && canEdit;
+    var canCancelSession = ViewData["CanCancelSession"] is bool canCancel && canCancel;
+    var isCancelEligibleSession = ViewData["IsCancelEligibleSession"] is bool isCancelEligible && isCancelEligible;
+    var canRestoreCanceledSession = ViewData["CanRestoreCanceledSession"] is bool canRestoreCanceled && canRestoreCanceled;
+    var canManageSessionArchive = User.IsInRole(AppRoles.Owner) || User.IsInRole(AppRoles.Administration);
+    Func<SessionStatus, string> workflowBadgeClass = status => $"workflowBadge is-{status.ToString().ToLowerInvariant()}";
+    bool HasText(string? value) => !string.IsNullOrWhiteSpace(value);
+    string YesNo(bool value) => value ? "Yes" : "No";
+    string ParticipantLabel(int participantOrder) => participantOrder == 1 ? "Client 1" : "Client 2";
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Session Details</h1>
+</div>
+
+@if (TempData["StatusMessage"] is string statusMessage)
+{
+    <div class="alert alert-success" role="alert">@statusMessage</div>
+}
+
+@if (TempData["ErrorMessage"] is string errorMessage)
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+<partial name="_SessionWorkflowProgress" model="Model.Status" />
+
+<div class="detailSummaryGrid mb-4">
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Clients</span><span class="detailSummaryValue">@(string.IsNullOrWhiteSpace(Model.ParticipantNames) ? "Not assigned" : Model.ParticipantNames)</span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Teacher</span><span class="detailSummaryValue">@(Model.Trainer?.TrainerName ?? "Not assigned")</span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Session Date (YYYY-MM-DD)</span><span class="detailSummaryValue">@Model.SessionDate.ToString("yyyy-MM-dd")</span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Session Type</span><span class="detailSummaryValue">@Model.SessionType</span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Sessions/Week</span><span class="detailSummaryValue">@Model.SharedSessionsPerWeekDisplay</span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Workflow Status</span><span class="detailSummaryValue"><span class="@workflowBadgeClass(Model.Status)">@Model.Status</span></span></div>
+    <div class="detailSummaryCard"><span class="detailSummaryLabel">Record Status</span><span class="detailSummaryValue">@(Model.IsArchived ? "Archived" : "Active")</span></div>
+    @if (isCanceled)
+    {
+        <div class="detailSummaryCard"><span class="detailSummaryLabel">Cancellation</span><span class="detailSummaryValue"><span class="workflowBadge is-canceled">Canceled</span></span></div>
+    }
+</div>
+
+@if (isCanceled)
+{
+    <div class="formSectionCard sectionStack mb-4">
+        <div class="sectionCardHeader">
+            <h2 class="sectionCardTitle">Cancellation Details</h2>
+        </div>
+        <div class="detailFields">
+            <div class="detailField">
+                <span class="detailFieldLabel">Reason</span>
+                <div class="detailFieldValue detailTextValue">@(HasText(Model.CancellationReason) ? Model.CancellationReason : "-")</div>
+            </div>
+            <div class="detailField">
+                <span class="detailFieldLabel">Canceled On</span>
+                <div class="detailFieldValue">@(Model.CanceledOn.HasValue ? Model.CanceledOn.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "-")</div>
+            </div>
+            <div class="detailField">
+                <span class="detailFieldLabel">Canceled By</span>
+                <div class="detailFieldValue">@(HasText(Model.CanceledBy) ? Model.CanceledBy : "-")</div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="accordion detailAccordion mb-4" id="sessionDetailsAccordion">
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingGeneralInfo"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGeneralInfo" aria-expanded="true" aria-controls="collapseGeneralInfo">General Info</button></h2>
+        <div id="collapseGeneralInfo" class="accordion-collapse collapse show" aria-labelledby="headingGeneralInfo" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body"><div class="detailFields">
+            <div class="detailField"><span class="detailFieldLabel">Session Type</span><div class="detailFieldValue">@Model.SessionType</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Session Date (YYYY-MM-DD)</span><div class="detailFieldValue">@Model.SessionDate.ToString("yyyy-MM-dd")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Teacher</span><div class="detailFieldValue">@(Model.Trainer?.TrainerName ?? "Not assigned")</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Client</span><div class="detailFieldValue">@(Model.PrimarySessionClient?.Client?.FullName ?? "Not assigned")</div></div>
+            @if (isSemiPrivate) { <div class="detailField"><span class="detailFieldLabel">Client 2</span><div class="detailFieldValue">@(Model.SecondarySessionClient?.Client?.FullName ?? "Not assigned")</div></div> }
+            <div class="detailField"><span class="detailFieldLabel">Sessions/Week</span><div class="detailFieldValue">@Model.SharedSessionsPerWeekDisplay</div></div>
+        </div></div></div>
+    </div>
+    @if (showLoggedStageSections)
+    {
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingSessionNotes"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSessionNotes" aria-expanded="false" aria-controls="collapseSessionNotes">Session Notes</button></h2>
+        <div id="collapseSessionNotes" class="accordion-collapse collapse" aria-labelledby="headingSessionNotes" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body">
+            @if (isSemiPrivate)
+            {
+                <div class="row g-4">
+                    @foreach (var participant in orderedParticipants)
+                    {
+                        <div class="col-md-6">
+                            <div class="workflowSectionHint"><strong>@ParticipantLabel(participant.ParticipantOrder)</strong></div>
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue">@(HasText(participant.SessionNotes?.Goals) ? participant.SessionNotes!.Goals : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue">@(HasText(participant.SessionNotes?.GeneralComments) ? participant.SessionNotes!.GeneralComments : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue">@(HasText(participant.SessionNotes?.SubjectiveReports) ? participant.SessionNotes!.SubjectiveReports : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue">@(HasText(participant.SessionNotes?.ObjectiveFindings) ? participant.SessionNotes!.ObjectiveFindings : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue">@(HasText(participant.SessionNotes?.Plan) ? participant.SessionNotes!.Plan : "-")</div></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="detailFields">
+                    <div class="detailField"><span class="detailFieldLabel">Goals</span><div class="detailFieldValue detailTextValue">@(HasText(Model.SessionNotes?.Goals) ? Model.SessionNotes!.Goals : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">General Comments</span><div class="detailFieldValue detailTextValue">@(HasText(Model.SessionNotes?.GeneralComments) ? Model.SessionNotes!.GeneralComments : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Subjective Reports</span><div class="detailFieldValue detailTextValue">@(HasText(Model.SessionNotes?.SubjectiveReports) ? Model.SessionNotes!.SubjectiveReports : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Objective Findings</span><div class="detailFieldValue detailTextValue">@(HasText(Model.SessionNotes?.ObjectiveFindings) ? Model.SessionNotes!.ObjectiveFindings : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Plan</span><div class="detailFieldValue detailTextValue">@(HasText(Model.SessionNotes?.Plan) ? Model.SessionNotes!.Plan : "-")</div></div>
+                </div>
+            }
+        </div></div>
+    </div>
+    }
+    @if (showLoggedStageSections)
+    {
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingAccessories"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAccessories" aria-expanded="false" aria-controls="collapseAccessories">Accessories</button></h2>
+        <div id="collapseAccessories" class="accordion-collapse collapse" aria-labelledby="headingAccessories" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body">
+            @if (isSemiPrivate)
+            {
+                <div class="row g-4">
+                    @foreach (var participant in orderedParticipants)
+                    {
+                        var accessories = participant.Accessories;
+
+                        <div class="col-md-6">
+                            <div class="workflowSectionHint"><strong>@ParticipantLabel(participant.ParticipantOrder)</strong></div>
+                            <div class="detailFields mt-3">
+                                <div class="detailField"><span class="detailFieldLabel">Head Pad</span><div class="detailFieldValue">@(accessories?.HeadPad.ToString() ?? "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue">@(accessories?.StrapsOrHandles.ToString() ?? "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue">@(accessories != null ? accessories.GearBar.ToString() : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue">@(accessories != null ? accessories.StopperSettings.ToString() : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.RubberPads) : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.HeadRest) : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.Towel) : "-")</div></div>
+                                <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.PosturePillow) : "-")</div></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                var accessories = Model.PrimarySessionClient?.Accessories;
+
+                <div class="detailFields">
+                    <div class="detailField"><span class="detailFieldLabel">Head Pad</span><div class="detailFieldValue">@(accessories?.HeadPad.ToString() ?? "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Straps/Handles</span><div class="detailFieldValue">@(accessories?.StrapsOrHandles.ToString() ?? "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Gear Bar</span><div class="detailFieldValue">@(accessories != null ? accessories.GearBar.ToString() : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Stopper Settings</span><div class="detailFieldValue">@(accessories != null ? accessories.StopperSettings.ToString() : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Rubber Pads</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.RubberPads) : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Head Rest</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.HeadRest) : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Towel</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.Towel) : "-")</div></div>
+                    <div class="detailField"><span class="detailFieldLabel">Posture Pillow</span><div class="detailFieldValue">@(accessories != null ? YesNo(accessories.PosturePillow) : "-")</div></div>
+                </div>
+            }
+        </div></div>
+    </div>
+    }
+    @if (showLoggedStageSections)
+    {
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingActions"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseActions" aria-expanded="false" aria-controls="collapseActions">Excercises</button></h2>
+        <div id="collapseActions" class="accordion-collapse collapse" aria-labelledby="headingActions" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body">
+            @if (isSemiPrivate)
+            {
+                @foreach (var participant in orderedParticipants)
+                {
+                    <h3 class="sectionCardTitle mb-3">@ParticipantLabel(participant.ParticipantOrder)</h3>
+                    @if (participant.Actions.Any())
+                    {
+                        <div class="actionCardGrid mb-4">
+                            @foreach (var action in participant.Actions.OrderBy(a => a.ID))
+                            {
+                                <article class="actionCard">
+                                    <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h3>
+                                    <div class="actionCardMeta">
+                                        <div><span class="detailFieldLabel">Type</span><div class="detailFieldValue">@action.ActionType</div></div>
+                                        <div><span class="detailFieldLabel">Apparatus</span><div class="detailFieldValue">@(action.Exercise?.Apparatus?.ApparatusName ?? "-")</div></div>
+                                        <div><span class="detailFieldLabel">Springs</span><div class="detailFieldValue">@(HasText(action.Springs) ? action.Springs : "-")</div></div>
+                                        <div><span class="detailFieldLabel">Props</span><div class="detailFieldValue">@(action.ExerciseProps != null && action.ExerciseProps.Any() ? string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name))) : "-")</div></div>
+                                        <div><span class="detailFieldLabel">Notes</span><div class="detailFieldValue detailTextValue">@(HasText(action.Notes) ? action.Notes : "-")</div></div>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="detailEmpty mb-4">No Excercises have been added yet.</p>
+                    }
+                }
+            }
+            else if (Model.Actions.Any())
+            {
+                <div class="actionCardGrid">
+                    @foreach (var action in Model.Actions)
+                    {
+                        <article class="actionCard">
+                            <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h3>
+                            <div class="actionCardMeta">
+                                <div><span class="detailFieldLabel">Type</span><div class="detailFieldValue">@action.ActionType</div></div>
+                                <div><span class="detailFieldLabel">Apparatus</span><div class="detailFieldValue">@(action.Exercise?.Apparatus?.ApparatusName ?? "-")</div></div>
+                                <div><span class="detailFieldLabel">Springs</span><div class="detailFieldValue">@(HasText(action.Springs) ? action.Springs : "-")</div></div>
+                                <div><span class="detailFieldLabel">Props</span><div class="detailFieldValue">@(action.ExerciseProps != null && action.ExerciseProps.Any() ? string.Join(", ", action.ExerciseProps.Select(ep => ep.Prop?.PropName).Where(name => !string.IsNullOrWhiteSpace(name))) : "-")</div></div>
+                                <div><span class="detailFieldLabel">Notes</span><div class="detailFieldValue detailTextValue">@(HasText(action.Notes) ? action.Notes : "-")</div></div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="detailEmpty">No Excercises have been added yet.</p>
+            }
+        </div></div>
+    </div>
+    }
+    @if (showLoggedStageSections)
+    {
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingNextSteps"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNextSteps" aria-expanded="false" aria-controls="collapseNextSteps">Next Steps</button></h2>
+        <div id="collapseNextSteps" class="accordion-collapse collapse" aria-labelledby="headingNextSteps" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body"><div class="detailFields">
+            <div class="detailField"><span class="detailFieldLabel">Next Appointment Booked</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.NextAppointmentBooked ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Communicated Progress</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.CommunicatedProgress ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Ready to Progress</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.ReadyToProgress ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Course Correction Needed</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.CourseCorrectionNeeded ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Team Consult</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.TeamConsult ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Referred Externally</span><div class="detailFieldValue">@YesNo(Model.NextSteps?.ReferredExternally ?? false)</div></div>
+            <div class="detailField"><span class="detailFieldLabel">Referred To</span><div class="detailFieldValue">@(HasText(Model.NextSteps?.ReferredTo) ? Model.NextSteps!.ReferredTo : "-")</div></div>
+        </div></div></div>
+    </div>
+    }
+    @if (showPhysioInfoSection)
+    {
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingPhysioInfo"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePhysioInfo" aria-expanded="false" aria-controls="collapsePhysioInfo">Physio Info</button></h2>
+            <div id="collapsePhysioInfo" class="accordion-collapse collapse" aria-labelledby="headingPhysioInfo" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body"><div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Physio Assessment</span><div class="detailFieldValue detailTextValue">@(HasText(Model.PhysioInfo?.PhysioAssessment) ? Model.PhysioInfo!.PhysioAssessment : "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Insurance Company</span><div class="detailFieldValue">@(HasText(Model.PhysioInfo?.InsuranceCompany) ? Model.PhysioInfo!.InsuranceCompany : "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Coverage Amount/Year</span><div class="detailFieldValue">@(Model.PhysioInfo?.CoverageAmountPerYear?.ToString("C") ?? "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Amount Used</span><div class="detailFieldValue">@(Model.PhysioInfo?.AmountUsed?.ToString("C") ?? "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Coverage Reset Date (YYYY-MM-DD)</span><div class="detailFieldValue">@(Model.PhysioInfo?.CoverageResetsDate?.ToString("yyyy-MM-dd") ?? "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Physiotherapist Name</span><div class="detailFieldValue">@(HasText(Model.PhysioInfo?.PhysiotherapistName) ? Model.PhysioInfo!.PhysiotherapistName : "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Coverage Shared</span><div class="detailFieldValue">@(Model.PhysioInfo != null ? YesNo(Model.PhysioInfo.CoverageShared) : "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Communicated With Physio</span><div class="detailFieldValue">@(Model.PhysioInfo != null ? YesNo(Model.PhysioInfo.CommunicatedWithPhysio) : "-")</div></div>
+            </div></div></div>
+        </div>
+    }
+    @if (isCompletedStage)
+    {
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingAdminComplete"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdminComplete" aria-expanded="false" aria-controls="collapseAdminComplete">Admin Complete</button></h2>
+            <div id="collapseAdminComplete" class="accordion-collapse collapse" aria-labelledby="headingAdminComplete" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body"><div class="detailFields">
+                <div class="detailField"><span class="detailFieldLabel">Paid</span><div class="detailFieldValue">@YesNo(Model.AdminComplete?.IsPaid ?? false)</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Admin Initials</span><div class="detailFieldValue">@(HasText(Model.AdminComplete?.AdminInitials) ? Model.AdminComplete!.AdminInitials : "-")</div></div>
+                <div class="detailField"><span class="detailFieldLabel">Admin Notes</span><div class="detailFieldValue detailTextValue">@(HasText(Model.AdminComplete?.AdminNotes) ? Model.AdminComplete!.AdminNotes : "-")</div></div>
+            </div></div></div>
+        </div>
+    }
+</div>
+
+<div class="formActions pageFooterActions mb-4">
+    @if (!Model.IsArchived)
+    {
+        @if (canEditSession)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.ID" asp-route-openSection="@editOpenSection" class="mu-btn mu-btn-primary">Edit</a>
+        }
+        else
+        {
+            <span class="mu-btn mu-btn-primary disabledAction" aria-disabled="true">Edit</span>
+        }
+        <a class="mu-btn mu-btn-secondary" asp-action="ExportToPdf" asp-route-id="@Model.ID">Export to PDF</a>
+        @if (isCancelEligibleSession)
+        {
+            @if (canCancelSession)
+            {
+                <button type="button" class="mu-btn mu-btn-danger" data-bs-toggle="modal" data-bs-target="#cancelSessionModal">Cancel Session</button>
+            }
+            else
+            {
+                <span class="mu-btn mu-btn-danger disabledAction" aria-disabled="true">Cancel Session</span>
+            }
+        }
+        else if (canManageSessionArchive)
+        {
+            <form asp-action="Archive" asp-route-id="@Model.ID" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="mu-btn mu-btn-danger">Archive</button>
+            </form>
+        }
+    }
+    else
+    {
+        @if (isCanceled)
+        {
+            @if (canRestoreCanceledSession)
+            {
+                <form asp-action="Unarchive" asp-route-id="@Model.ID" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="mu-btn mu-btn-accent">Restore Session</button>
+                </form>
+            }
+            else
+            {
+                <span class="mu-btn mu-btn-accent disabledAction" aria-disabled="true">Restore Session</span>
+            }
+        }
+        else if (canManageSessionArchive)
+        {
+            <form asp-action="Unarchive" asp-route-id="@Model.ID" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="mu-btn mu-btn-accent">Unarchive</button>
+            </form>
+        }
+    }
+
+    <a asp-action="Index" class="mu-btn mu-btn-ghost">Back to Sessions</a>
+</div>
+
+@if (canCancelSession)
+{
+    <form asp-action="Cancel" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@Model.ID" />
+
+        <div class="modal fade" id="cancelSessionModal" tabindex="-1" aria-labelledby="cancelSessionTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered mu-modal-dialog">
+                <div class="modal-content mu-modal">
+                    <div class="mu-modal-accent mu-modal-accent-warning"></div>
+                    <div class="modal-header mu-modal-header">
+                        <div>
+                            <span class="mu-modal-badge mu-modal-badge-warning">Cancel Session</span>
+                            <h2 class="modal-title mu-modal-title mu-modal-title-sm" id="cancelSessionTitle">Cancel this session?</h2>
+                            <p class="mu-modal-copy">Canceling archives the session. A reason is required, and the session can be restored later by Owner or Administration.</p>
+                        </div>
+                        <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="CancellationReason" class="form-label">Cancellation Reason</label>
+                        <textarea id="CancellationReason"
+                                  name="CancellationReason"
+                                  class="form-control"
+                                  rows="4"
+                                  maxlength="500"
+                                  required
+                                  placeholder="Enter the reason for canceling this session."></textarea>
+                    </div>
+                    <div class="modal-footer mu-modal-footer">
+                        <button type="submit" class="mu-btn mu-btn-danger">Cancel Session</button>
+                        <button type="button" class="mu-btn mu-btn-ghost" data-bs-dismiss="modal">Keep Session</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+}

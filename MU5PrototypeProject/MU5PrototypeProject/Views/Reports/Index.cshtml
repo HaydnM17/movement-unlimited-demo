@@ -1,0 +1,390 @@
+@model MU5PrototypeProject.ViewModels.ReportsViewModel
+
+@{
+    ViewData["Title"] = "Reports";
+    var preset = Model.Filter.Preset;
+    string PresetClass(string value) => preset == value ? "mu-btn-accent" : "mu-btn-ghost";
+}
+
+<div class="pageHeader">
+    <h1 class="pageTitle">Reports</h1>
+</div>
+
+<div class="formSectionCard reportFiltersCard mb-4">
+    <div class="sectionCardHeader">
+        <div>
+            <h2 class="sectionCardTitle">Date Range</h2>
+            <p class="reportFiltersLead">Choose a quick preset or set a custom window for the reports below.</p>
+        </div>
+    </div>
+    <form asp-action="Index" method="get" class="reportFiltersForm">
+        <input type="hidden" id="activeTab" name="activeTab" value="@ViewData["activeTab"]" />
+        <div class="reportFiltersGrid">
+            <section class="reportFilterPanel">
+                <span class="reportFilterLabel">Quick ranges</span>
+                <div class="reportPresetGroup">
+                    <button type="submit" name="preset" value="Last7Days" class="mu-btn mu-btn-sm @PresetClass("Last7Days")">Last 7 Days</button>
+                    <button type="submit" name="preset" value="ThisMonth" class="mu-btn mu-btn-sm @PresetClass("ThisMonth")">This Month</button>
+                    <button type="submit" name="preset" value="Last3Months" class="mu-btn mu-btn-sm @PresetClass("Last3Months")">Last 3 Months</button>
+                    <button type="submit" name="preset" value="ThisYear" class="mu-btn mu-btn-sm @PresetClass("ThisYear")">This Year</button>
+                </div>
+            </section>
+
+            <section class="reportFilterPanel">
+                <span class="reportFilterLabel">Custom range</span>
+                <div class="reportCustomRange">
+                    <label class="reportFilterField">
+                        <span class="reportFilterFieldLabel">Start</span>
+                        <input type="date" class="formInput" name="startDate"
+                               value="@Model.Filter.StartDate.ToString("yyyy-MM-dd")" />
+                    </label>
+                    <label class="reportFilterField">
+                        <span class="reportFilterFieldLabel">End</span>
+                        <input type="date" class="formInput" name="endDate"
+                               value="@Model.Filter.EndDate.ToString("yyyy-MM-dd")" />
+                    </label>
+                    <button type="submit" name="preset" value="Custom" class="mu-btn mu-btn-primary reportApplyButton">Apply</button>
+                </div>
+            </section>
+        </div>
+        <p class="reportRangeSummary">
+            Showing data from <strong>@Model.Filter.StartDate.ToString("yyyy-MM-dd")</strong> to <strong>@Model.Filter.EndDate.ToString("yyyy-MM-dd")</strong>
+        </p>
+    </form>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs" id="reportTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions"
+                type="button" role="tab" aria-controls="sessions" aria-selected="true">Session Statistics</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="clients-tab" data-bs-toggle="tab" data-bs-target="#clients"
+                type="button" role="tab" aria-controls="clients" aria-selected="false">Client Analytics</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="trainers-tab" data-bs-toggle="tab" data-bs-target="#trainers"
+                type="button" role="tab" aria-controls="trainers" aria-selected="false">Trainer Workload</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="exercises-tab" data-bs-toggle="tab" data-bs-target="#exercises"
+                type="button" role="tab" aria-controls="exercises" aria-selected="false">Exercise Popularity</button>
+    </li>
+</ul>
+
+<div class="tab-content mt-3" id="reportTabContent">
+
+    <!-- Tab 1: Session Statistics -->
+    <div class="tab-pane fade show active" id="sessions" role="tabpanel" aria-labelledby="sessions-tab">
+
+        <div class="detailSummaryGrid mb-4">
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Total Sessions</span>
+                <span class="detailSummaryValue">@Model.SessionStats.TotalSessions</span>
+            </div>
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Private</span>
+                <span class="detailSummaryValue">@Model.SessionStats.PrivateCount</span>
+            </div>
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Semi-Private</span>
+                <span class="detailSummaryValue">@Model.SessionStats.SemiPrivateCount</span>
+            </div>
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Physio</span>
+                <span class="detailSummaryValue">@Model.SessionStats.PhysioCount</span>
+            </div>
+        </div>
+
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Sessions by Day of Week</h2>
+                <a asp-action="ExportReportToExcel"
+                   asp-route-preset="@Model.Filter.Preset"
+                   asp-route-startDate="@Model.Filter.StartDate.ToString("yyyy-MM-dd")"
+                   asp-route-endDate="@Model.Filter.EndDate.ToString("yyyy-MM-dd")"
+                   asp-route-report="sessions"
+                   class="mu-btn mu-btn-sm mu-btn-secondary">Export to Excel</a>
+            </div>
+            @if (Model.SessionStats.ByDayOfWeek.Any())
+            {
+                <div class="dataBox">
+                    <table class="table dataTable">
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Total</th>
+                                <th>Private</th>
+                                <th>Semi-Private</th>
+                                <th>Physio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.SessionStats.ByDayOfWeek)
+                            {
+                                <tr>
+                                    <td data-label="Day">@row.DayOfWeek</td>
+                                    <td data-label="Total"><strong>@row.Total</strong></td>
+                                    <td data-label="Private">@row.Private</td>
+                                    <td data-label="Semi-Private">@row.SemiPrivate</td>
+                                    <td data-label="Physio">@row.Physio</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="p-3 text-muted">No data for the selected period.</p>
+            }
+        </div>
+    </div>
+
+    <!-- Tab 2: Client Analytics -->
+    <div class="tab-pane fade" id="clients" role="tabpanel" aria-labelledby="clients-tab">
+
+        <div class="detailSummaryGrid mb-4">
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Active Clients</span>
+                <span class="detailSummaryValue">@Model.ClientAnalytics.TotalActiveClients</span>
+            </div>
+            <div class="detailSummaryCard">
+                <span class="detailSummaryLabel">Avg Sessions / Client</span>
+                <span class="detailSummaryValue">@Model.ClientAnalytics.AvgSessionsPerClient</span>
+            </div>
+        </div>
+
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Most Active Clients (Top 15)</h2>
+                <a asp-action="ExportReportToExcel"
+                   asp-route-preset="@Model.Filter.Preset"
+                   asp-route-startDate="@Model.Filter.StartDate.ToString("yyyy-MM-dd")"
+                   asp-route-endDate="@Model.Filter.EndDate.ToString("yyyy-MM-dd")"
+                   asp-route-report="clients"
+                   class="mu-btn mu-btn-sm mu-btn-secondary">Export to Excel</a>
+            </div>
+            @if (Model.ClientAnalytics.MostActiveClients.Any())
+            {
+                <div class="dataBox">
+                    <table class="table dataTable">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Sessions</th>
+                                <th>Last Session</th>
+                                <th>Most Frequent Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.ClientAnalytics.MostActiveClients)
+                            {
+                                <tr>
+                                    <td data-label="Client">@row.ClientName</td>
+                                    <td data-label="Sessions"><strong>@row.SessionCount</strong></td>
+                                    <td data-label="Last Session">@(row.LastSessionDate?.ToString("yyyy-MM-dd") ?? "N/A")</td>
+                                    <td data-label="Most Frequent Type">@row.MostFrequentType</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="p-3 text-muted">No data for the selected period.</p>
+            }
+        </div>
+    </div>
+
+    <!-- Tab 3: Trainer Workload -->
+    <div class="tab-pane fade" id="trainers" role="tabpanel" aria-labelledby="trainers-tab">
+
+        <div class="formSectionCard">
+            <div class="sectionCardHeader">
+                <h2 class="sectionCardTitle">Trainer Sessions</h2>
+                <a asp-action="ExportReportToExcel"
+                   asp-route-preset="@Model.Filter.Preset"
+                   asp-route-startDate="@Model.Filter.StartDate.ToString("yyyy-MM-dd")"
+                   asp-route-endDate="@Model.Filter.EndDate.ToString("yyyy-MM-dd")"
+                   asp-route-report="trainers"
+                   class="mu-btn mu-btn-sm mu-btn-secondary">Export to Excel</a>
+            </div>
+            @if (Model.TrainerWorkload.Trainers.Any())
+            {
+                <div class="dataBox">
+                    <table class="table dataTable">
+                        <thead>
+                            <tr>
+                                <th>Trainer</th>
+                                <th>Total</th>
+                                <th>Private</th>
+                                <th>Semi-Private</th>
+                                <th>Physio</th>
+                                <th>Unique Clients</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.TrainerWorkload.Trainers)
+                            {
+                                <tr>
+                                    <td data-label="Trainer">@row.TrainerName</td>
+                                    <td data-label="Total"><strong>@row.TotalSessions</strong></td>
+                                    <td data-label="Private">@row.PrivateCount</td>
+                                    <td data-label="Semi-Private">@row.SemiPrivateCount</td>
+                                    <td data-label="Physio">@row.PhysioCount</td>
+                                    <td data-label="Unique Clients">@row.UniqueClients</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="p-3 text-muted">No data for the selected period.</p>
+            }
+        </div>
+    </div>
+
+    <!-- Tab 4: Exercise Popularity -->
+    <div class="tab-pane fade" id="exercises" role="tabpanel" aria-labelledby="exercises-tab">
+
+        <div class="sectionStack">
+            <div class="formSectionCard">
+                <div class="sectionCardHeader">
+                    <h2 class="sectionCardTitle">Top Exercises (Top 15)</h2>
+                    <a asp-action="ExportReportToExcel"
+                       asp-route-preset="@Model.Filter.Preset"
+                       asp-route-startDate="@Model.Filter.StartDate.ToString("yyyy-MM-dd")"
+                       asp-route-endDate="@Model.Filter.EndDate.ToString("yyyy-MM-dd")"
+                       asp-route-report="exercises"
+                       class="mu-btn mu-btn-sm mu-btn-secondary">Export to Excel</a>
+                </div>
+                @if (Model.ExercisePopularity.TopExercises.Any())
+                {
+                    <div class="dataBox">
+                        <table class="table dataTable">
+                            <thead>
+                                <tr>
+                                    <th>Exercise</th>
+                                    <th>Apparatus</th>
+                                    <th>Times Used</th>
+                                    <th>Unique Clients</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.ExercisePopularity.TopExercises)
+                                {
+                                    <tr>
+                                        <td data-label="Exercise">@row.ExerciseName</td>
+                                        <td data-label="Apparatus">@row.ApparatusName</td>
+                                        <td data-label="Times Used"><strong>@row.TimesUsed</strong></td>
+                                        <td data-label="Unique Clients">@row.UniqueClients</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="p-3 text-muted">No data for the selected period.</p>
+                }
+            </div>
+
+            <div class="formSectionCard">
+                <div class="sectionCardHeader">
+                    <h2 class="sectionCardTitle">Apparatus Usage</h2>
+                </div>
+                @if (Model.ExercisePopularity.ApparatusUsage.Any())
+                {
+                    <div class="dataBox">
+                        <table class="table dataTable">
+                            <thead>
+                                <tr>
+                                    <th>Apparatus</th>
+                                    <th>Exercises</th>
+                                    <th>Total Usages</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.ExercisePopularity.ApparatusUsage)
+                                {
+                                    <tr>
+                                        <td data-label="Apparatus">@row.ApparatusName</td>
+                                        <td data-label="Exercises">@row.ExerciseCount</td>
+                                        <td data-label="Total Usages"><strong>@row.TotalUsages</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="p-3 text-muted">No data for the selected period.</p>
+                }
+            </div>
+
+            <div class="formSectionCard">
+                <div class="sectionCardHeader">
+                    <h2 class="sectionCardTitle">Prop Usage (Top 15)</h2>
+                </div>
+                @if (Model.ExercisePopularity.PropUsage.Any())
+                {
+                    <div class="dataBox">
+                        <table class="table dataTable">
+                            <thead>
+                                <tr>
+                                    <th>Prop</th>
+                                    <th>Times Used</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.ExercisePopularity.PropUsage)
+                                {
+                                    <tr>
+                                        <td data-label="Prop">@row.PropName</td>
+                                        <td data-label="Times Used"><strong>@row.TimesUsed</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="p-3 text-muted">No data for the selected period.</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            // Preserve active tab across form submissions
+            var tabButtons = document.querySelectorAll('#reportTabs button[data-bs-toggle="tab"]');
+            var hiddenInput = document.getElementById('activeTab');
+
+            tabButtons.forEach(function (btn) {
+                btn.addEventListener('shown.bs.tab', function () {
+                    hiddenInput.value = btn.getAttribute('data-bs-target');
+                });
+            });
+
+            // Restore active tab from query/hidden input
+            var saved = hiddenInput.value;
+            if (saved) {
+                var target = document.querySelector('#reportTabs button[data-bs-target="' + saved + '"]');
+                if (target) {
+                    new bootstrap.Tab(target).show();
+                }
+            }
+        })();
+    </script>
+}
