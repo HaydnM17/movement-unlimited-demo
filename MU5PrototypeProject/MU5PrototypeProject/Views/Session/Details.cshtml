@@ -1,7 +1,6 @@
 @model MU5PrototypeProject.Models.Session
 
 @{
-    ViewData["Title"] = "Session Details";
     var postResult = ViewData["PostResult"]?.ToString() ?? "Details";
     var editOpenSection = string.Equals(postResult, "Create", StringComparison.OrdinalIgnoreCase) ? "Actions" : null;
     var orderedParticipants = Model.OrderedSessionClients.ToList();
@@ -22,10 +21,19 @@
     bool HasText(string? value) => !string.IsNullOrWhiteSpace(value);
     string YesNo(bool value) => value ? "Yes" : "No";
     string ParticipantLabel(int participantOrder) => participantOrder == 1 ? "Client 1" : "Client 2";
+    string pageTitle = Model.Status switch
+    {
+        SessionStatus.Opened => "Admin Setup Review",
+        SessionStatus.Logged => "Trainer Log Review",
+        SessionStatus.Completed => "Closing Review",
+        _ => "Session Details"
+    };
+    ViewData["Title"] = pageTitle;
 }
 
 <div class="pageHeader">
-    <h1 class="pageTitle">Session Details</h1>
+    <h1 class="pageTitle">@pageTitle</h1>
+    <p class="pageLead">Review the current session details and workflow stage.</p>
 </div>
 
 @if (TempData["StatusMessage"] is string statusMessage)
@@ -174,7 +182,7 @@
     @if (showLoggedStageSections)
     {
     <div class="accordion-item">
-        <h2 class="accordion-header" id="headingActions"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseActions" aria-expanded="false" aria-controls="collapseActions">Excercises</button></h2>
+        <h2 class="accordion-header" id="headingActions"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseActions" aria-expanded="false" aria-controls="collapseActions">Exercises</button></h2>
         <div id="collapseActions" class="accordion-collapse collapse" aria-labelledby="headingActions" data-bs-parent="#sessionDetailsAccordion"><div class="accordion-body">
             @if (isSemiPrivate)
             {
@@ -187,7 +195,7 @@
                             @foreach (var action in participant.Actions.OrderBy(a => a.ID))
                             {
                                 <article class="actionCard">
-                                    <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h3>
+                                    <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Exercise")</h3>
                                     <div class="actionCardMeta">
                                         <div><span class="detailFieldLabel">Type</span><div class="detailFieldValue">@action.ActionType</div></div>
                                         <div><span class="detailFieldLabel">Apparatus</span><div class="detailFieldValue">@(action.Exercise?.Apparatus?.ApparatusName ?? "-")</div></div>
@@ -201,7 +209,7 @@
                     }
                     else
                     {
-                        <p class="detailEmpty mb-4">No Excercises have been added yet.</p>
+                        <p class="detailEmpty mb-4">No Exercises have been added yet.</p>
                     }
                 }
             }
@@ -211,7 +219,7 @@
                     @foreach (var action in Model.Actions)
                     {
                         <article class="actionCard">
-                            <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Excercise")</h3>
+                            <h3 class="actionCardTitle">@(action.Exercise?.ExerciseName ?? "Exercise")</h3>
                             <div class="actionCardMeta">
                                 <div><span class="detailFieldLabel">Type</span><div class="detailFieldValue">@action.ActionType</div></div>
                                 <div><span class="detailFieldLabel">Apparatus</span><div class="detailFieldValue">@(action.Exercise?.Apparatus?.ApparatusName ?? "-")</div></div>
@@ -225,7 +233,7 @@
             }
             else
             {
-                <p class="detailEmpty">No Excercises have been added yet.</p>
+                <p class="detailEmpty">No Exercises have been added yet.</p>
             }
         </div></div>
     </div>

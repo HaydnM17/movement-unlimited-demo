@@ -415,7 +415,7 @@ namespace MU5PrototypeProject.Controllers
                     .Select(a => new SessionHistoryActionDto
                     {
                         Id = a.ID,
-                        ExerciseName = a.Exercise?.ExerciseName ?? "Excercise",
+                        ExerciseName = a.Exercise?.ExerciseName ?? "Exercise",
                         ApparatusName = a.Exercise?.Apparatus?.ApparatusName,
                         Springs = a.Springs,
                         PropNames = a.ExerciseProps
@@ -966,6 +966,7 @@ namespace MU5PrototypeProject.Controllers
                 "ID",
                 "ApparatusName");
             ViewBag.SpringsJson = System.Text.Json.JsonSerializer.Serialize(allSprings);
+            ViewData["WorkflowStatus"] = SessionStatus.Logged;
 
             return View(vm);
         }
@@ -1028,6 +1029,7 @@ namespace MU5PrototypeProject.Controllers
                 ViewBag.SpringsJson = System.Text.Json.JsonSerializer.Serialize(
                     await _context.Springs.OrderBy(s => s.SpringName)
                         .Select(s => new { s.ApparatusID, s.SpringName }).ToListAsync());
+                ViewData["WorkflowStatus"] = SessionStatus.Logged;
 
                 return View(vm);
             }
@@ -1131,6 +1133,7 @@ namespace MU5PrototypeProject.Controllers
             ViewBag.SpringsJson = System.Text.Json.JsonSerializer.Serialize(
                 await _context.Springs.OrderBy(s => s.SpringName)
                     .Select(s => new { s.ApparatusID, s.SpringName }).ToListAsync());
+            ViewData["WorkflowStatus"] = SessionStatus.Logged;
 
             return View(vm);
         }
@@ -1166,6 +1169,7 @@ namespace MU5PrototypeProject.Controllers
                 ViewBag.SpringsJson = System.Text.Json.JsonSerializer.Serialize(
                     await _context.Springs.OrderBy(s => s.SpringName)
                         .Select(s => new { s.ApparatusID, s.SpringName }).ToListAsync());
+                ViewData["WorkflowStatus"] = SessionStatus.Logged;
 
                 return View(vm);
             }
@@ -1250,6 +1254,7 @@ namespace MU5PrototypeProject.Controllers
             }
 
             ViewData["SessionID"] = action.SessionClient?.SessionID;
+            ViewData["WorkflowStatus"] = SessionStatus.Logged;
             return View(action);
         }
 

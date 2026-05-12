@@ -1,23 +1,37 @@
-﻿@model MU5PrototypeProject.Models.Action
+@model MU5PrototypeProject.Models.Action
 
-<h2>Delete Excercise</h2>
+@{
+    ViewData["Title"] = "Delete Exercise";
+    var workflowStatus = ViewData["WorkflowStatus"] is SessionStatus status
+        ? status
+        : SessionStatus.Logged;
+}
 
-<p>Are you sure you want to delete this Excercise?</p>
-
-<div class="mb-3">
-    <strong>Exercise:</strong> @Model.Exercise?.ExerciseName
-</div>
-<div class="mb-3">
-    <strong>Springs:</strong> @Model.Springs
-</div>
-<div class="mb-3">
-    <strong>Notes:</strong> @Model.Notes
+<div class="pageHeader">
+    <h1 class="pageTitle">Delete Exercise</h1>
+    <p class="pageLead">Remove this exercise from the trainer log.</p>
 </div>
 
-<form asp-action="DeleteAction" method="post">
-    @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="ID" />
+<partial name="_SessionWorkflowProgress" model="workflowStatus" />
 
-    <button type="submit" class="btn btn-danger">Delete</button>
-    <a asp-action="Edit" asp-route-id="@ViewData["SessionID"]" class="btn btn-secondary">Cancel</a>
-</form>
+<div class="formSectionCard sectionStack">
+    <p>Are you sure you want to delete this exercise?</p>
+
+    <div class="mb-3">
+        <strong>Exercise:</strong> @Model.Exercise?.ExerciseName
+    </div>
+    <div class="mb-3">
+        <strong>Springs:</strong> @Model.Springs
+    </div>
+    <div class="mb-3">
+        <strong>Notes:</strong> @Model.Notes
+    </div>
+
+    <form asp-action="DeleteAction" method="post" class="formActions">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="ID" />
+
+        <button type="submit" class="mu-btn mu-btn-danger">Delete</button>
+        <a asp-action="Edit" asp-route-id="@ViewData["SessionID"]" class="mu-btn mu-btn-ghost">Cancel</a>
+    </form>
+</div>

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
 
 namespace MU5PrototypeProject.Models.ViewModels
@@ -14,8 +14,8 @@ namespace MU5PrototypeProject.Models.ViewModels
         [Display(Name = "Exercise")]
         public int ExerciseID { get; set; }
 
-        [Display(Name = "Excercise Type")]
-        [Required(ErrorMessage = "An Excercise type must be selected.")]
+        [Display(Name = "Exercise Type")]
+        [Required(ErrorMessage = "An Exercise type must be selected.")]
         public ActionType ActionType { get; set; } = ActionType.MidSession;
 
         public string? Springs { get; set; }

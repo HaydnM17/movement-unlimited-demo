@@ -14,16 +14,16 @@ namespace MU5PrototypeProject.Models
     {
         public int ID { get; set; }
 
-        [Required(ErrorMessage = "A participant must be associated with this Excercise.")]
+        [Required(ErrorMessage = "A participant must be associated with this Exercise.")]
         public int SessionClientID { get; set; }
         public SessionClient? SessionClient { get; set; }
 
-        [Required(ErrorMessage = "An exercise must be selected for this Excercise.")]
+        [Required(ErrorMessage = "An exercise must be selected for this Exercise.")]
         public int ExerciseID { get; set; }
         public Exercise? Exercise { get; set; }
 
-        [Display(Name = "Excercise Type")]
-        [Required(ErrorMessage = "An Excercise type must be selected.")]
+        [Display(Name = "Exercise Type")]
+        [Required(ErrorMessage = "An Exercise type must be selected.")]
         public ActionType ActionType { get; set; } = ActionType.MidSession;
 
         [Display(Name = "Spring Setting")]

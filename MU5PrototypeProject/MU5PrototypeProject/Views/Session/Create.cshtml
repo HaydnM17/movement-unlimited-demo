@@ -2,11 +2,12 @@
 @model MU5PrototypeProject.Models.ViewModels.SessionUpsertVM
 
 @{
-    ViewData["Title"] = "Create Session";
+    ViewData["Title"] = "Admin Setup";
 }
 
 <div class="pageHeader">
-    <h1 class="pageTitle">Create Session</h1>
+    <h1 class="pageTitle">Admin Setup</h1>
+    <p class="pageLead">Schedule the session and assign the client and teacher before it moves to trainer logging.</p>
 </div>
 
 <partial name="_SessionWorkflowProgress" model="SessionStatus.Opened" />
@@ -87,6 +88,7 @@
                 <button type="button" class="btn-close mu-modal-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body mu-modal-body">
+                <partial name="_SessionWorkflowProgress" model="SessionStatus.Opened" />
                 <div class="detailFields clientConfirmGrid">
                     <div class="detailField">
                         <span class="detailFieldLabel">Session Type</span>

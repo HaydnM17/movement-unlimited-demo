@@ -1,8 +1,20 @@
 @model MU5PrototypeProject.Models.ViewModels.ActionCreateVM
 
-<h2>Add Excercise</h2>
+@{
+    ViewData["Title"] = "Add Exercise";
+    var workflowStatus = ViewData["WorkflowStatus"] is SessionStatus status
+        ? status
+        : SessionStatus.Logged;
+}
 
-<form asp-action="AddAction" method="post" id="addActionForm">
+<div class="pageHeader">
+    <h1 class="pageTitle">Add Exercise</h1>
+    <p class="pageLead">Add an exercise entry to the trainer log for this session.</p>
+</div>
+
+<partial name="_SessionWorkflowProgress" model="workflowStatus" />
+
+<form asp-action="AddAction" method="post" id="addActionForm" class="formSectionCard sectionStack">
     @Html.AntiForgeryToken()
 
     <input type="hidden" asp-for="SessionID" />
@@ -109,8 +121,10 @@
         <textarea asp-for="Notes" class="form-control" style="resize:none;"></textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save Excercise</button>
-    <a asp-action="Edit" asp-route-id="@Model.SessionID" class="btn btn-secondary">Cancel</a>
+    <div class="formActions">
+        <button type="submit" class="mu-btn mu-btn-primary">Save Exercise</button>
+        <a asp-action="Edit" asp-route-id="@Model.SessionID" class="mu-btn mu-btn-ghost">Cancel</a>
+    </div>
 </form>
 
 <!-- New Exercise Modal -->

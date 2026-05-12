@@ -1828,6 +1828,21 @@ body {
     color: #fff;
 }
 
+.mu-modal .sessionWorkflowProgress {
+    position: static;
+    margin-bottom: 1rem;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.mu-modal .sessionWorkflowSteps {
+    gap: .5rem;
+}
+
+.mu-modal .sessionWorkflowStep {
+    padding: .55rem .6rem;
+}
+
 .workflowActionBar {
     justify-content: space-between;
     align-items: center;
