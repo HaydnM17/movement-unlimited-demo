@@ -10,15 +10,6 @@ This is as a group project madae by Niagara College students in the Computer Pro
 
 Use the "Login with Demo Account" button on the login page. The demo signs in as Demo Owner Account, which has owner access so the full application can be reviewed.
 
-## What It Includes
-
-- Role-based staff access for Owner, Administration, and Trainer users
-- Client profiles and session management
-- Session flow from admin setup to trainer logging to closing review
-- Progress indicator while moving through an active session workflow
-- Reports and export tools
-- Seeded demo data for portfolio review
-
 ## Documentation
 
 - [Project README PDF](docs/README.pdf)
