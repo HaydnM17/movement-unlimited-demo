@@ -2,6 +2,10 @@
 
 ASP.NET Core MVC scheduling and session workflow application for Movement Unlimited.
 
+## Live Demo
+
+[Open the Movement Unlimited demo site](https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net)
+
 ## Portfolio Note
 
 This project was originally built as a group project. This repository is my personal portfolio copy, adapted with demo data, owner-level demo access, and cleanup work so the application can be reviewed independently.
@@ -23,7 +27,7 @@ This project was originally built as a group project. This repository is my pers
 
 ## Demo Access
 
-Use the **Login with Demo Account** button on the login page. The seeded demo account has Owner access so reviewers can see the full application.
+Open the [live demo site](https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net) and use the **Login with Demo Account** button on the login page. The seeded demo account has Owner access so reviewers can see the full application.
 
 ## Running Locally
 
@@ -52,7 +56,13 @@ Suggested Azure settings:
 - Operating system: `Windows`
 - Pricing plan: `Free F1`
 
-After deployment, Azure gives the app a public URL like:
+Current live deployment:
+
+```text
+https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net
+```
+
+Azure gives each app a public URL like:
 
 ```text
 https://movement-unlimited-demo.azurewebsites.net
