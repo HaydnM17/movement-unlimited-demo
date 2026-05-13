@@ -1,21 +1,21 @@
 # Movement Unlimited Demo
 
-ASP.NET Core MVC scheduling and session workflow application for Movement Unlimited.
+Movement Unlimited Demo is an ASP.NET Core MVC app for managing clients, staff access, and Pilates session workflows.
+
+This started as a group project. This repo is my portfolio copy, with demo data, owner-level demo access, cleanup work, and a live hosted version for review.
 
 ## Live Demo
 
-[Open the Movement Unlimited demo site](https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net)
+[Open the live demo](https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net)
 
-## Portfolio Note
+Use the "Login with Demo Account" button on the login page. The demo signs in as Demo Owner Account, which has owner access so the full application can be reviewed.
 
-This project was originally built as a group project. This repository is my personal portfolio copy, adapted with demo data, owner-level demo access, and cleanup work so the application can be reviewed independently.
+## What It Includes
 
-## Features
-
-- Staff login with role-based access for Owner, Administration, and Trainer users
-- Demo owner account for reviewing the full application
-- Client and session management
-- Session workflow from admin setup to trainer logging to final closing review
+- Role-based staff access for Owner, Administration, and Trainer users
+- Client profiles and session management
+- Session flow from admin setup to trainer logging to closing review
+- Progress indicator while moving through an active session workflow
 - Reports and export tools
 - Seeded demo data for portfolio review
 
@@ -25,13 +25,9 @@ This project was originally built as a group project. This repository is my pers
 - [User Manual](docs/UserManual.pdf)
 - [Default Demo Accounts](docs/DefaultAccounts.pdf)
 
-## Demo Access
+## Run Locally
 
-Open the [live demo site](https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net) and use the **Login with Demo Account** button on the login page. The seeded demo account has Owner access so reviewers can see the full application.
-
-## Running Locally
-
-Open the solution in Visual Studio or run:
+Open the solution in Visual Studio, or run:
 
 ```bash
 dotnet build MU5PrototypeProject/MU5PrototypeProject.sln
@@ -43,29 +39,3 @@ Then open:
 ```text
 http://localhost:5155
 ```
-
-## Portfolio Deployment
-
-The easiest live portfolio option is Azure App Service on the Free F1 plan.
-
-Suggested Azure settings:
-
-- Web App name: `movement-unlimited-demo`
-- Publish: `Code`
-- Runtime stack: `.NET 9`
-- Operating system: `Windows`
-- Pricing plan: `Free F1`
-
-Current live deployment:
-
-```text
-https://movement-unlimited-demo-bndcf6dwe0buevbd.canadaeast-01.azurewebsites.net
-```
-
-Azure gives each app a public URL like:
-
-```text
-https://movement-unlimited-demo.azurewebsites.net
-```
-
-The app seeds demo data on first run. On Azure App Service, the SQLite demo database is stored under the app's persistent home storage so it survives restarts and redeployments.
