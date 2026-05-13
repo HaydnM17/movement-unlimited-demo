@@ -1,8 +1,8 @@
 # Movement Unlimited Demo
 
-Movement Unlimited Demo is an ASP.NET Core MVC app for managing clients, staff access, and Pilates session workflows.
+This is an ASP.NET Core MVC app made for Movement Unlimited, a pilates studio in Niagara, Ontario.
 
-This started as a group project. This repo is my portfolio copy, with demo data, owner-level demo access, cleanup work, and a live hosted version for review.
+This is as a group project madae by Niagara College students in the Computer Programming & Analysis program. This repo is my portfolio copy.
 
 ## Live Demo
 
