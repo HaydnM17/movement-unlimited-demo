@@ -25,7 +25,7 @@
     {
         SessionStatus.Opened => "Admin Setup Review",
         SessionStatus.Logged => "Trainer Log Review",
-        SessionStatus.Completed => "Closing Review",
+        SessionStatus.Completed => "Completed Session Details",
         _ => "Session Details"
     };
     ViewData["Title"] = pageTitle;
@@ -46,7 +46,10 @@
     <div class="alert alert-danger" role="alert">@errorMessage</div>
 }
 
-<partial name="_SessionWorkflowProgress" model="Model.Status" />
+@if (!isCompletedStage)
+{
+    <partial name="_SessionWorkflowProgress" model="Model.Status" />
+}
 
 <div class="detailSummaryGrid mb-4">
     <div class="detailSummaryCard"><span class="detailSummaryLabel">Clients</span><span class="detailSummaryValue">@(string.IsNullOrWhiteSpace(Model.ParticipantNames) ? "Not assigned" : Model.ParticipantNames)</span></div>
