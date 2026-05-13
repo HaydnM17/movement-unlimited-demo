@@ -39,3 +39,23 @@ Then open:
 ```text
 http://localhost:5155
 ```
+
+## Portfolio Deployment
+
+The easiest live portfolio option is Azure App Service on the Free F1 plan.
+
+Suggested Azure settings:
+
+- Web App name: `movement-unlimited-demo`
+- Publish: `Code`
+- Runtime stack: `.NET 9`
+- Operating system: `Windows`
+- Pricing plan: `Free F1`
+
+After deployment, Azure gives the app a public URL like:
+
+```text
+https://movement-unlimited-demo.azurewebsites.net
+```
+
+The app seeds demo data on first run. On Azure App Service, the SQLite demo database is stored under the app's persistent home storage so it survives restarts and redeployments.

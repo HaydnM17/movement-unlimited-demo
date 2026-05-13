@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -11,8 +12,9 @@ using MU5PrototypeProject.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("MUContext")
+var configuredConnectionString = builder.Configuration.GetConnectionString("MUContext")
         ?? throw new InvalidOperationException("Connection string 'MUContext' not found.");
+var connectionString = ResolveSqliteConnectionString(configuredConnectionString);
 
 builder.Services.Configure<BootstrapOwnerOptions>(
     builder.Configuration.GetSection(BootstrapOwnerOptions.SectionName));
@@ -156,3 +158,28 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
+static string ResolveSqliteConnectionString(string configuredConnectionString)
+{
+    var sqliteConnection = new SqliteConnectionStringBuilder(configuredConnectionString);
+    var dataSource = sqliteConnection.DataSource;
+
+    if (string.IsNullOrWhiteSpace(dataSource)
+        || string.Equals(dataSource, ":memory:", StringComparison.OrdinalIgnoreCase)
+        || Path.IsPathRooted(dataSource))
+    {
+        return sqliteConnection.ConnectionString;
+    }
+
+    var azureHome = Environment.GetEnvironmentVariable("HOME");
+    var isAzureAppService = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+    if (!isAzureAppService || string.IsNullOrWhiteSpace(azureHome))
+    {
+        return sqliteConnection.ConnectionString;
+    }
+
+    var dataDirectory = Path.Combine(azureHome, "data");
+    Directory.CreateDirectory(dataDirectory);
+    sqliteConnection.DataSource = Path.Combine(dataDirectory, dataSource);
+
+    return sqliteConnection.ConnectionString;
+}
