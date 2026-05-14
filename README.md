@@ -2,7 +2,7 @@
 
 This is an ASP.NET Core MVC app made for Movement Unlimited, a pilates studio in Niagara, Ontario.
 
-This is as a group project madae by Niagara College students in the Computer Programming & Analysis program. This repo is my portfolio copy.
+This is as a group project made by Niagara College students in the Computer Programming & Analysis program. This repo is my portfolio copy.
 
 ## Live Demo
 
